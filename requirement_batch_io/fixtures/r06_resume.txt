@@ -1,0 +1,5 @@
+候选人简历（示例）
+姓名: 李程
+技能: Python, FastAPI, PostgreSQL, 基础 Kubernetes；熟悉分布式 tracing（OpenTelemetry）。
+经历: 3 年后端；上一份工作负责订单与支付子系统，SLA 99.95%，主导过读写分离与幂等回调改造。
+项目亮点: 设计补偿事务跑批；将峰值 P99 从 800ms 降到 220ms（样本监控截图略）。

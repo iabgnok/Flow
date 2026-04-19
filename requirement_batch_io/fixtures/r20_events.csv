@@ -1,0 +1,8 @@
+user_id,event,ts
+u1,page_view_home,2026-04-01T10:00:00Z
+u1,signup_start,2026-04-01T10:02:00Z
+u1,signup_complete,2026-04-01T10:08:00Z
+u2,page_view_pricing,2026-04-01T11:00:00Z
+u2,checkout_start,2026-04-01T11:05:00Z
+u2,churn_risk_flag,2026-04-02T09:00:00Z
+u3,page_view_home,2026-04-03T08:00:00Z

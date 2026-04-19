@@ -1,0 +1,25 @@
+# 子工作流：供 few-shot「模式 D」引用；仅一步 file_reader，输出 file_content。
+name: child_linear_simple
+description: 读取单个文件并产出 file_content，供父工作流 sub_workflow 合并上下文。
+version: "1.0"
+
+inputs:
+  file_path:
+    type: string
+    description: 源文件路径
+    required: true
+
+outputs:
+  file_content:
+    type: string
+    description: 文件文本内容
+    required: true
+
+steps:
+- id: 1
+  name: 读取
+  action: file_reader
+  inputs:
+    file_path: "{{file_path}}"
+  outputs:
+    file_content: file_content

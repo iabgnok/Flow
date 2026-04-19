@@ -1,0 +1,91 @@
+name: competitor_analysis
+description: 从竞品公司公开资料中提取产品功能、定价策略、用户画像，进行横向对比分析并生成报告
+version: '1.0'
+inputs:
+  source_path:
+    type: string
+    description: 竞品公开资料文件路径
+    required: true
+    default:
+  report_path:
+    type: string
+    description: 竞品分析报告输出路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 生成的竞品分析报告文件路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取竞品资料
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{source_path}}'
+  outputs:
+    competitor_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 提取关键信息
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{competitor_content}}'
+    instruction: 
+      从以下竞品公司公开资料中提取以下三方面信息，按结构化格式输出：1.产品功能列表（列出所有主要功能）2.定价策略（包括定价模式、价格区间、套餐选项）3.目标用户画像（描述核心用户群体特征）。请确保信息准确提取，不要遗漏重要细节。
+  outputs:
+    extracted_info: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 生成横向对比分析
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 
+      基于提取的竞品信息，进行横向对比分析。请按以下结构组织：1.产品功能对比（优势、劣势、差异化）2.定价策略对比（性价比、市场定位）3.目标用户对比（重叠度、细分差异）4.综合竞争力评估。确保分析客观、有洞察力。
+    context: '{{extracted_info}}'
+  outputs:
+    comparison_analysis: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 验证分析质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{comparison_analysis}}'
+    criteria: 分析必须基于提取的竞品信息，包含产品功能、定价策略、用户画像三个维度的对比，有明确的竞争力评估。不得输出与竞品分析无关的内容。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 3
+  max_retries: 2
+  workflow:
+- id: 5
+  name: 生成竞品分析报告
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{report_path}}'
+    content: "# 竞品分析报告\n\n## 竞品信息提取\n\n{{extracted_info}}\n\n## 横向对比分析\n\n{{comparison_analysis}}\n\
+      \n## 结论与建议\n\n*注：基于以上分析，可进一步制定市场策略和产品优化方向。*"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

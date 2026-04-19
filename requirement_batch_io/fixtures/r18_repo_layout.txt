@@ -1,0 +1,16 @@
+仓库结构说明（代替 zip 包 · Monorepo 示意）
+
+myflow/
+  cli.py
+  engine/
+    runner.py
+    validator.py
+    models.py
+  skills/
+    file_ops.py
+    llm_call.py
+tests/
+  integration/test_cli_smoke.py
+  unit/test_validator.py
+
+说明: 以上为示意树；技术审查可结合同目录提供的 r10_code.py 样例源文件，关注幂等与错误传播路径。

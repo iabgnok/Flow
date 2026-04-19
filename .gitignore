@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local secrets (use .env.example as template)
+.env
+
+# Local runtime / test artifacts
+myflow_state.db
+.coverage
+
+# Accidental placeholder file from templated paths
+{output_path}
+
+# Champion 缓存目录（阶段 4）
+.myflow/
+
+# 需求批量测试执行产物（保留目录结构用 .gitkeep）
+requirement_batch_io/runs/*
+!requirement_batch_io/runs/.gitkeep
+修改.md
+
+.vscode/

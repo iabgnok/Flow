@@ -1,0 +1,81 @@
+name: ebook_reading_notes_generator
+description: 读取整本电子书文本，进行多层次分析并生成完整的读书笔记文档
+version: '1.0'
+inputs:
+  ebook_path:
+    type: string
+    description: 电子书文本文件路径
+    required: true
+    default:
+  output_path:
+    type: string
+    description: 输出读书笔记文档路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 生成的读书笔记文档路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取电子书文本
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{ebook_path}}'
+  outputs:
+    ebook_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 全书多维度分析
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{ebook_content}}'
+    instruction: "请对这本电子书进行以下多维度分析，并分段输出结果：\n\n1. 章节结构识别与目录提取：识别全书章节结构，提取完整的目录（包括章节标题和层级关系）\n\
+      2. 每章详细摘要：为每个章节生成200-300字的详细摘要，涵盖核心内容\n3. 全书核心论点与论证链条：提取全书的核心论点、主要观点和完整的论证逻辑链条\n\
+      4. 章节间逻辑关系与知识图谱：分析各章节之间的逻辑关系（如递进、并列、因果等），生成知识图谱描述\n5. 阅读理解题生成：从读者视角生成不同难度（简单、中等、困难）的阅读理解题，每类3-5题，包含问题和参考答案\n\
+      \n请确保分析结果结构清晰，便于后续组装成读书笔记。"
+  outputs:
+    full_analysis: analysis_result
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 验证分析完整性
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{full_analysis}}'
+    criteria: 分析结果必须包含以下所有部分：1) 章节结构目录 2) 每章摘要 3) 核心论点与论证链条 4) 章节间逻辑关系与知识图谱描述 5)
+      阅读理解题。每个部分都应内容充实、结构清晰，且所有内容都基于输入电子书文本，不得出现与书籍无关的主题。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 2
+  max_retries: 2
+  workflow:
+- id: 4
+  name: 生成读书笔记文档
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_path}}'
+    content: "# 电子书读书笔记\n\n## 一、书籍基本信息\n- 分析时间：自动生成\n- 源文件：{{ebook_path}}\n\n## 二、全书章节结构与目录\n\
+      \n{{full_analysis}}\n\n---\n\n*注：以上为完整的多维度分析结果，包含章节结构、每章摘要、核心论点、逻辑关系和阅读理解题。*\n\
+      \n---\n\n## 三、使用说明\n\n本读书笔记由AI自动生成，可用于：\n1. 快速了解书籍结构与核心内容\n2. 复习各章节要点\n3. 理解全书论证逻辑\n\
+      4. 进行阅读理解练习\n5. 构建知识体系框架"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

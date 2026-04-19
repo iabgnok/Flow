@@ -1,0 +1,137 @@
+name: prd_analysis_and_planning
+description: 分析PRD文档，拆解功能模块，生成用户故事和验收标准，评估技术复杂度，给出优先级排序建议，输出迭代排期规划表
+version: '1.0'
+inputs:
+  prd_path:
+    type: string
+    description: PRD文档文件路径
+    required: true
+    default:
+  output_path:
+    type: string
+    description: 迭代排期规划表输出路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 迭代排期规划表文件路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取PRD文档
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{prd_path}}'
+  outputs:
+    prd_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 拆解功能模块
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{prd_content}}'
+    instruction: 分析这份PRD文档，拆解出主要功能模块。为每个模块提供：1.模块名称 2.核心功能描述 3.业务价值 
+      4.依赖关系。按模块列表结构化输出。
+  outputs:
+    modules_analysis: analysis_result
+    modules_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 生成用户故事和验收标准
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 
+      基于以下功能模块分析，为每个模块生成用户故事和验收标准。用户故事格式：作为[角色]，我想要[功能]，以便[价值]。验收标准格式：Given-When-Then。按模块分组输出。
+    context: '{{modules_analysis}}'
+  outputs:
+    user_stories: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 评估技术复杂度
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{modules_analysis}}'
+    instruction: 基于功能模块分析，评估每个模块的技术复杂度。考虑：1.技术实现难度（低/中/高） 2.开发工作量（人天估算） 3.技术风险点 
+      4.所需技术栈。按模块结构化输出。
+  outputs:
+    tech_complexity: analysis_result
+    complexity_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 5
+  name: 生成优先级排序建议
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 基于功能模块的业务价值和技术复杂度，给出优先级排序建议。考虑：1.业务价值高低 2.技术复杂度 3.依赖关系 
+      4.市场时机。推荐优先级顺序（高/中/低）和迭代建议。
+    context: "功能模块分析：{{modules_analysis}}\n技术复杂度评估：{{tech_complexity}}"
+  outputs:
+    priority_recommendation: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 6
+  name: 验证优先级建议质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{priority_recommendation}}'
+    criteria: 
+      优先级排序建议必须基于功能模块的业务价值和技术复杂度评估，给出明确的优先级顺序（高/中/低）和迭代建议。不得输出与PRD分析无关的其它内容。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 5
+  max_retries: 2
+  workflow:
+- id: 7
+  name: 生成迭代排期规划表
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 基于功能模块、用户故事、技术复杂度和优先级建议，生成一份迭代排期规划表。包含：1.迭代周期（如迭代1、迭代2） 
+      2.每个迭代包含的模块 3.每个模块的用户故事数量 4.预估工作量（人天） 5.技术负责人建议 6.风险提示。以表格形式输出。
+    context: "功能模块分析：{{modules_analysis}}\n用户故事和验收标准：{{user_stories}}\n技术复杂度评估：{{tech_complexity}}\n\
+      优先级排序建议：{{priority_recommendation}}"
+  outputs:
+    iteration_plan: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 8
+  name: 保存迭代排期规划表
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_path}}'
+    content: "# PRD分析及迭代排期规划\n\n## 功能模块拆解\n\n{{modules_analysis}}\n\n## 用户故事和验收标准\n\
+      \n{{user_stories}}\n\n## 技术复杂度评估\n\n{{tech_complexity}}\n\n## 优先级排序建议\n\n{{priority_recommendation}}\n\
+      \n## 迭代排期规划表\n\n{{iteration_plan}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

@@ -1,0 +1,91 @@
+name: data_analysis_to_console
+description: 读取数据文件，分析内容并输出分析报告到终端
+version: '1.0'
+inputs:
+  data_file_path:
+    type: string
+    description: 数据文件路径
+    required: true
+    default:
+  analysis_instruction:
+    type: string
+    description: 分析指令，告诉LLM如何分析数据
+    required: true
+    default: 分析数据内容，总结关键信息、趋势和异常点
+outputs:
+  analysis_result:
+    type: string
+    description: 分析结果文本
+    required: true
+    default:
+  verify_result:
+    type: string
+    description: 验证说明文本
+    required: true
+    default:
+  generated_text:
+    type: string
+    description: 终端展示的最终报告
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取数据文件
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{data_file_path}}'
+  outputs:
+    file_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 分析数据内容
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{file_content}}'
+    instruction: |-
+      上面「内容」字段是 file_reader 读入的**数据文件原文**，一字不差来自磁盘；你必须只根据这段原文分析，不得假设它是代码仓库、项目说明或任何未在原文中出现的场景。
+      若原文含人名、分数、班级、表头等，结论中须出现可核对的要点；禁止编造原文没有的指标（例如测试覆盖率、代码复杂度、内存泄漏等）。
+      用户侧重说明：{{analysis_instruction}}
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 验证分析质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{analysis_result}}'
+    criteria: |-
+      分析结果必须能从「待检查内容」中看出与数据文件相关的依据（如引用原文中的具体文字、数字或结构）；
+      若出现与数据文件明显无关的主题（如泛泛的代码质量审计、未在数据中出现的 KPI），判定为不通过并说明理由。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 2
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 生成终端报告
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: |-
+      将下列「分析」「验证」整理成一段适合终端阅读的纯文本报告（可加小标题）。报告必须紧扣数据文件相关结论，不得引入与输入数据无关的新主题或虚构指标。
+    context: "分析结果：{{analysis_result}}\n验证结果：{{verify_result}}"
+  outputs:
+    generated_text: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+

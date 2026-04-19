@@ -1,0 +1,49 @@
+name: meeting_minutes_to_action_items
+description: 从会议录音转写文字稿中提取待办事项清单和负责人列表
+version: '1.0'
+inputs:
+  transcript_path:
+    type: string
+    description: 会议录音转写文字稿文件路径
+    required: true
+    default:
+outputs:
+  action_items:
+    type: string
+    description: 提取的待办事项清单和负责人列表
+    required: true
+    default:
+  confidence:
+    type: string
+    description: 分析置信度
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取会议文字稿
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{transcript_path}}'
+  outputs:
+    transcript: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 提取待办事项和负责人
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{transcript}}'
+    instruction: 仔细阅读这份会议录音转写文字稿，提取出所有明确的待办事项（action 
+      items）和对应的负责人。请按以下格式结构化输出：1. 待办事项清单（每个事项包含：事项描述、截止日期/时间要求、优先级）2. 
+      负责人列表（每个负责人包含：姓名/角色、负责的事项编号、联系方式/备注）。如果某些信息不明确，请标注为'待确认'。
+  outputs:
+    action_items: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

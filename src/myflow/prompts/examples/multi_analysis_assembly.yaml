@@ -1,0 +1,73 @@
+# 示例：多维度分析合并为一步 + file_writer 内插组装
+# 演示要点（与业务领域无关）：
+#   1. 同类 llm_analyze 合并为一步（材料正文只传 LLM 一次）
+#   2. 后续 llm_generate 只吃分析结果，不重传原始材料
+#   3. 终稿用 file_writer 拼接（不用 llm_generate 做全文汇总）
+
+name: merged_analysis_assembly
+description: 读取一份材料，合并多维度分析后生成建议并落盘
+version: "1.0"
+
+inputs:
+  source_path:
+    type: string
+    description: 输入文件路径
+  report_path:
+    type: string
+    description: 输出报告路径
+
+outputs:
+  report_path:
+    type: string
+    description: 输出报告路径
+
+steps:
+  - id: 1
+    name: 读取材料
+    action: file_reader
+    inputs:
+      file_path: "{{source_path}}"
+    outputs:
+      source_text: file_content
+
+  # 同类分析合并为一步；正文变量仅在此步传入 LLM
+  - id: 2
+    name: 多维度分析（单步合并）
+    action: llm_analyze
+    inputs:
+      content: "{{source_text}}"
+      instruction: "对下列材料一次性完成三方面分析并分段输出：1.结构与要点 2.问题与风险 3.可改进处"
+    outputs:
+      full_analysis: analysis_result
+
+  # 只吃分析结果，不重传 source_text
+  - id: 3
+    name: 生成改进建议
+    action: llm_generate
+    inputs:
+      instruction: "仅依据下列分析结果，列出可执行改进项并标注优先级"
+      context: "{{full_analysis}}"
+    outputs:
+      recommendations: generated_text
+
+  - id: 4
+    name: 验证建议
+    action: llm_verify
+    inputs:
+      artifact: "{{recommendations}}"
+      criteria: "建议须对应分析中已列出的问题；每条含问题、动作、优先级"
+    outputs:
+      verify_result: verify_result
+      passed: passed
+    on_fail: 3
+    max_retries: 2
+
+  - id: 5
+    name: 保存报告
+    action: file_writer
+    inputs:
+      file_path: "{{report_path}}"
+      content: "# 综合报告\n\n## 分析\n\n{{full_analysis}}\n\n## 建议\n\n{{recommendations}}"
+    outputs:
+      report_path: report_path
+      bytes_written: bytes_written

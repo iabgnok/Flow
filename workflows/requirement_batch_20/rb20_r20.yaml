@@ -1,0 +1,189 @@
+name: user_growth_analysis_report
+description: 分析SaaS产品用户行为日志和属性表，进行数据清洗、漏斗分析、用户分群、流失风险分析，生成个性化运营策略和完整增长报告
+version: '1.0'
+inputs:
+  behavior_log_path:
+    type: string
+    description: 用户行为日志CSV文件路径
+    required: true
+    default:
+  user_attributes_path:
+    type: string
+    description: 用户属性表文件路径
+    required: true
+    default:
+  output_report_path:
+    type: string
+    description: 输出分析报告文件路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 生成的用户增长分析报告路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取行为日志
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{behavior_log_path}}'
+  outputs:
+    behavior_log_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 读取用户属性表
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{user_attributes_path}}'
+  outputs:
+    user_attributes_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 数据清洗与异常值处理
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: "行为日志：{{behavior_log_content}}\n\n用户属性：{{user_attributes_content}}"
+    instruction: 对两份CSV数据进行数据清洗和异常值处理：1.检查并处理缺失值、重复值、格式错误 
+      2.识别异常值（如异常时间戳、不合理数值）并提供处理建议 3.评估数据质量并生成清洗报告
+  outputs:
+    data_quality_report: analysis_result
+    data_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 构建用户行为漏斗
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: "清洗后的数据报告：{{data_quality_report}}\n\n原始行为日志：{{behavior_log_content}}"
+    instruction: 基于用户行为日志构建典型用户行为漏斗（如：访问→注册→激活→付费→留存），计算各环节转化率，识别漏斗瓶颈环节，分析流失原因
+  outputs:
+    funnel_analysis: analysis_result
+    funnel_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 5
+  name: 用户分群分析
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: "行为日志：{{behavior_log_content}}\n用户属性：{{user_attributes_content}}\n漏斗分析：{{funnel_analysis}}"
+    instruction: 进行用户分群分析：1.应用RFM模型（最近一次消费、消费频率、消费金额）对用户分层 2.基于行为特征进行聚类分析 
+      3.识别关键用户群体（高价值用户、活跃用户、流失风险用户等）
+  outputs:
+    user_segmentation: analysis_result
+    segmentation_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 6
+  name: 高流失风险群体特征归因
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: "用户分群结果：{{user_segmentation}}\n行为日志：{{behavior_log_content}}\n漏斗分析：{{funnel_analysis}}"
+    instruction: 针对高流失风险群体进行特征归因分析：1.识别导致流失的关键行为模式 2.分析用户属性特征与流失的相关性 
+      3.量化各因素对流失风险的贡献度
+  outputs:
+    churn_analysis: analysis_result
+    churn_confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 7
+  name: 生成个性化运营策略
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: "基于以下分析结果，为每个用户分群生成个性化的运营策略建议文案：\n1.用户分群：{{user_segmentation}}\n\
+      2.漏斗分析：{{funnel_analysis}}\n3.流失分析：{{churn_analysis}}\n\n要求：为每个分群（如高价值用户、活跃用户、流失风险用户、沉默用户等）提供针对性的运营策略，包括激活、留存、转化、召回等具体措施"
+    context: "用户分群：{{user_segmentation}}\n漏斗分析：{{funnel_analysis}}\n流失分析：{{churn_analysis}}"
+  outputs:
+    strategy_recommendations: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 8
+  name: 验证策略建议质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{strategy_recommendations}}'
+    criteria: 
+      策略建议必须基于前述分析结果，针对每个用户分群提供具体、可执行的运营措施；不得包含与输入数据无关的通用建议；每条建议应明确对应特定用户群体和业务目标
+  outputs:
+    strategy_verify: verify_result
+    strategy_passed: passed
+  condition:
+  on_fail: 7
+  max_retries: 2
+  workflow:
+- id: 9
+  name: 生成叙事型管理层报告
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: "将以下分析结果组织成管理层可读的叙事型报告：\n1.数据质量评估：{{data_quality_report}}\n2.用户行为漏斗分析：{{funnel_analysis}}\n\
+      3.用户分群结果：{{user_segmentation}}\n4.流失风险分析：{{churn_analysis}}\n5.运营策略建议：{{strategy_recommendations}}\n\
+      \n报告结构：执行摘要、核心发现、机会点识别、行动建议、风险提示、附录（方法论说明）"
+    context: "数据质量：{{data_quality_report}}\n漏斗分析：{{funnel_analysis}}\n用户分群：{{user_segmentation}}\n\
+      流失分析：{{churn_analysis}}\n策略建议：{{strategy_recommendations}}"
+  outputs:
+    narrative_report: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 10
+  name: 验证报告完整性
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{narrative_report}}'
+    criteria: 
+      报告必须包含所有要求的章节（执行摘要、核心发现、机会点识别、行动建议、风险提示、附录）；内容必须基于前述分析结果，不得替换为无关主题；正文中不得出现未替换的{{...}}占位符或<待填写>标记
+  outputs:
+    report_verify: verify_result
+    report_passed: passed
+  condition:
+  on_fail: 9
+  max_retries: 2
+  workflow:
+- id: 11
+  name: 组装完整分析报告包
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_report_path}}'
+    content: "# 用户增长分析报告\n\n## 执行摘要\n{{narrative_report}}\n\n## 详细分析\n\n### 1. 数据质量评估\n\
+      置信度：{{data_confidence}}\n{{data_quality_report}}\n\n### 2. 用户行为漏斗分析\n置信度：{{funnel_confidence}}\n\
+      {{funnel_analysis}}\n\n### 3. 用户分群分析\n置信度：{{segmentation_confidence}}\n{{user_segmentation}}\n\
+      \n### 4. 高流失风险群体特征归因\n置信度：{{churn_confidence}}\n{{churn_analysis}}\n\n### 5.
+      个性化运营策略建议\n{{strategy_recommendations}}\n\n### 6. 方法论说明与数据置信度评估\n本报告基于以下分析方法：\n\
+      1. 数据清洗：缺失值处理、异常值检测、格式标准化\n2. 漏斗分析：用户旅程阶段划分、转化率计算、瓶颈识别\n3. 用户分群：RFM模型、行为聚类分析\n\
+      4. 流失分析：特征相关性分析、风险因素归因\n5. 策略生成：分群针对性建议、可执行措施设计\n\n整体数据置信度评估：基于各环节置信度加权平均，建议决策时结合业务实际进行验证。"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

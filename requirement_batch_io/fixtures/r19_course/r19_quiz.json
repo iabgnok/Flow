@@ -1,0 +1,4 @@
+[
+  {"id": "q1", "question": "Which is a greeting?", "options": ["Goodbye", "Hello", "Maybe"], "answer": 1},
+  {"id": "q2", "question": "Which phrase asks for repetition?", "options": ["See you later", "Could you say that again?", "Turn it up"], "answer": 1}
+]

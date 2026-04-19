@@ -1,0 +1,92 @@
+name: contract_review
+description: 审查中文合同：识别类型、提取核心条款、标注风险、给出修改建议，生成审查备忘录
+version: '1.0'
+inputs:
+  contract_path:
+    type: string
+    description: 中文合同文件路径
+    required: true
+    default:
+  output_path:
+    type: string
+    description: 审查备忘录输出路径
+    required: true
+    default:
+outputs:
+  memo_path:
+    type: string
+    description: 生成的审查备忘录文件路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取合同文件
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{contract_path}}'
+  outputs:
+    contract_text: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 分析合同类型与条款
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{contract_text}}'
+    instruction: "请分析这份中文合同：1.识别合同类型（如买卖合同、服务合同、技术开发合同等）；2.逐条提取核心条款：金额（包括支付方式、币种）、期限（合同有效期、履行期限）、违约责任（违约金、赔偿范围）、知识产权归属（如有）；3.标注潜在风险条款（如模糊表述、权利义务不对等、法律风险）；4.针对每个风险条款给出具体的修改建议。请按以下结构输出：\n\
+      \n## 合同类型\n[类型]\n\n## 核心条款提取\n- 金额：[内容]\n- 期限：[内容]\n- 违约责任：[内容]\n- 知识产权归属：[内容]\n\
+      \n## 潜在风险条款与修改建议\n1. [风险条款原文]：\n   - 风险分析：[分析]\n   - 修改建议：[具体建议]"
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 生成审查备忘录
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 
+      基于以下合同分析结果，生成一份正式的合同审查备忘录。备忘录应包括：合同基本信息、审查结论摘要、详细条款分析、风险提示与修改建议、总体建议。请使用专业、清晰的格式。
+    context: '{{analysis_result}}'
+  outputs:
+    memo_content: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 验证备忘录质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{memo_content}}'
+    criteria: 
+      备忘录必须包含：1.合同类型识别；2.核心条款提取（金额、期限、违约责任、知识产权归属）；3.至少一个风险条款标注及修改建议；4.内容必须基于输入合同文本，不得生成与合同无关的通用建议。备忘录应结构清晰、专业。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 3
+  max_retries: 2
+  workflow:
+- id: 5
+  name: 保存审查备忘录
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_path}}'
+    content: '{{memo_content}}'
+  outputs:
+    memo_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

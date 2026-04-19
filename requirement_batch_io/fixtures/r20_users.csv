@@ -1,0 +1,4 @@
+user_id,plan,country,ltv,signup_ts
+u1,free,CN,0,2026-04-01T10:08:00Z
+u2,pro,US,120,2026-04-01T10:08:00Z
+u3,trial,DE,0,2026-04-03T08:15:00Z

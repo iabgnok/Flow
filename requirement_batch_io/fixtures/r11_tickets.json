@@ -1,0 +1,6 @@
+[
+  {"id": "t1", "text": "如何重置密码？在线等", "channel": "web", "priority": "P3"},
+  {"id": "t2", "text": "ERR_TIMEOUT 出现在订单提交后，重试两次仍失败", "channel": "email", "priority": "P1"},
+  {"id": "t3", "text": "建议增加深色模式开关与快捷键自定义", "channel": "app", "priority": "P4"},
+  {"id": "t4", "text": "发票抬头修改后仍显示旧名称", "channel": "web", "priority": "P2"}
+]

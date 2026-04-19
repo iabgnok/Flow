@@ -1,0 +1,36 @@
+name: hello_world
+description: 读取一个文件并把内容写入到另一个文件
+version: "1.0"
+
+inputs:
+  file_path:
+    type: string
+    description: 输入文件路径
+    required: true
+  output_path:
+    type: string
+    description: 输出文件路径
+    required: true
+
+outputs:
+  report_path:
+    type: string
+    description: 输出文件路径
+
+steps:
+- id: 1
+  name: 读取文件
+  action: file_reader
+  inputs:
+    file_path: "{{file_path}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: 写入文件
+  action: file_writer
+  inputs:
+    file_path: "{{output_path}}"
+    content: "{{file_content}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written

@@ -1,0 +1,39 @@
+# 格式：sub_workflow（workflow 为相对工作流目录路径）→ file_writer
+name: parent_with_sub
+description: "（占位）"
+version: "1.0"
+
+inputs:
+  in_file:
+    type: string
+    description: "（占位）"
+    required: true
+  out_file:
+    type: string
+    description: "（占位）"
+    required: true
+
+outputs:
+  report_path:
+    type: string
+    description: "（占位）"
+
+steps:
+- id: 1
+  name: "（占位）"
+  action: sub_workflow
+  description: workflow 为相对目录路径，勿用 {{}} 包裹整段路径字面量。
+  workflow: examples/child_linear_simple.yaml
+  inputs:
+    file_path: "{{in_file}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: "（占位）"
+  action: file_writer
+  inputs:
+    file_path: "{{out_file}}"
+    content: "{{file_content}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written

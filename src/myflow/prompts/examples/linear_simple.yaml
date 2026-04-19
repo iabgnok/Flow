@@ -1,0 +1,37 @@
+# 格式：线性 2 步，无 LLM（仅示范 action 与 {{inputs}} 串联）
+name: linear_simple
+description: "（占位：一句话说明工作流）"
+version: "1.0"
+
+inputs:
+  file_path:
+    type: string
+    description: "（占位）"
+    required: true
+  output_path:
+    type: string
+    description: "（占位）"
+    required: true
+
+outputs:
+  report_path:
+    type: string
+    description: "（占位）"
+
+steps:
+- id: 1
+  name: "（占位）"
+  action: file_reader
+  inputs:
+    file_path: "{{file_path}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: "（占位）"
+  action: file_writer
+  inputs:
+    file_path: "{{output_path}}"
+    content: "{{file_content}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written

@@ -1,0 +1,50 @@
+# 格式：线性 3 步（读 → llm_analyze → file_writer）；分析指令由工作流入参注入，示例不写业务场景
+name: linear_with_llm
+description: "（占位）"
+version: "1.0"
+
+inputs:
+  file_path:
+    type: string
+    description: "（占位）"
+    required: true
+  output_path:
+    type: string
+    description: "（占位）"
+    required: true
+  analysis_instruction:
+    type: string
+    description: 透传给 llm_analyze 的 instruction（run 时 --input 传入）
+    required: true
+
+outputs:
+  report_path:
+    type: string
+    description: "（占位）"
+
+steps:
+- id: 1
+  name: "（占位）"
+  action: file_reader
+  inputs:
+    file_path: "{{file_path}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: "（占位）"
+  action: llm_analyze
+  inputs:
+    content: "{{file_content}}"
+    instruction: "{{analysis_instruction}}"
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence
+- id: 3
+  name: "（占位）"
+  action: file_writer
+  inputs:
+    file_path: "{{output_path}}"
+    content: "{{analysis_result}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written

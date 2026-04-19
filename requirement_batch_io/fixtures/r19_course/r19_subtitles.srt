@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:02,500
+Hello and welcome to lesson one.
+
+2
+00:00:02,800 --> 00:00:05,200
+Today we learn greetings and polite forms.
+
+3
+00:00:05,500 --> 00:00:07,900
+Please repeat after me: Good morning everyone.

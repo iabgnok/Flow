@@ -1,0 +1,6 @@
+本目录为 batch 测试夹具，按「读入类型」覆盖（与 run_specs 及 test_requirement_batch_reader_smoke 一致）：
+
+- 单文件：r18 亦可用 r18_repo_layout.txt（纯文本，非 zip）；r18 主跑 r18_repo_sample.zip 测 zip 解压
+- 逗号多路径：r13（r13_news.txt 等 3 个）、r17（r17_*.txt 三份）
+- 目录：r19_course（讲义 / 字幕 / 题库）
+- zip：r18_repo_sample.zip（内含 README.md、src/main.py、tests/test_main.py）

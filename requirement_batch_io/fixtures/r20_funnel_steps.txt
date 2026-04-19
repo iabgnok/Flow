@@ -1,0 +1,2 @@
+漏斗事件序列（逗号分隔，业务语义）
+page_view_home,signup_start,signup_complete,checkout_start

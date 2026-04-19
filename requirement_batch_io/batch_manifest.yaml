@@ -1,0 +1,165 @@
+# 20 条真实需求测试：元数据与约定文件名（工作流 YAML 落在 workflows/requirement_batch_20/）。
+# 生成命令示例（在项目根执行）：
+#   uv run myflow generate "<requirement 字段全文>" -o workflows/requirement_batch_20/rb20_r01.yaml
+version: 1
+workflow_subdir: workflows/requirement_batch_20
+summary_path: requirement_batch_io/SUMMARY.md
+run_specs_path: requirement_batch_io/run_specs.yaml
+fixtures_root: requirement_batch_io/fixtures
+items:
+  - id: "01"
+    tier: simple
+    name_zh: 论文翻译与摘要
+    requirement: 给你一篇英文论文PDF，帮我翻译成中文并整理出摘要。
+    default_workflow_filename: rb20_r01.yaml
+    fixture_hint: 当前引擎仅支持文本文件读取；用 r01_paper_en.txt 代替 PDF 正文做联调。
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r01_paper_en.txt
+  - id: "02"
+    tier: simple
+    name_zh: 客户评价情感分析
+    requirement: 我有一份客户评价的CSV，帮我做情感分析，标注出正面/负面/中性，输出新的表格。
+    default_workflow_filename: rb20_r02.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r02_reviews.csv
+  - id: "03"
+    tier: simple
+    name_zh: 会议纪要待办
+    requirement: 把我这份会议录音转写的文字稿，提炼出待办事项清单和负责人列表。
+    default_workflow_filename: rb20_r03.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r03_meeting_transcript.txt
+  - id: "04"
+    tier: simple
+    name_zh: 多平台营销文案
+    requirement: 输入一个产品名称和核心卖点，帮我生成小红书、微博、朋友圈三个平台的营销文案。
+    default_workflow_filename: rb20_r04.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r04_product.txt
+  - id: "05"
+    tier: simple
+    name_zh: 访谈需求提取
+    requirement: 我丢给你一段用户访谈记录，帮我提取关键需求点并归类输出。
+    default_workflow_filename: rb20_r05.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r05_interview.txt
+  - id: "06"
+    tier: medium
+    name_zh: 简历与 JD 匹配评估
+    requirement: 给你一份简历PDF和一份岗位JD，先提取简历关键信息结构化，再逐项和JD要求做匹配打分，最后生成一份候选人评估报告。
+    default_workflow_filename: rb20_r06.yaml
+    fixture_hint: 简历以 UTF-8 文本代替 PDF。
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r06_resume.txt
+      - requirement_batch_io/fixtures/r06_jd.txt
+  - id: "07"
+    tier: medium
+    name_zh: 电商文案 SEO 优化
+    requirement: 我有一批电商商品的标题和详情页文案（Excel），帮我先做SEO关键词提取，再改写标题优化搜索权重，然后为每个商品自动生成5条卖点短语，最终输出一份优化后的商品文案表。
+    default_workflow_filename: rb20_r07.yaml
+    fixture_hint: 用 CSV 代替 Excel。
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r07_products.csv
+  - id: "08"
+    tier: medium
+    name_zh: 研报章节摘要与要点
+    requirement: 输入一篇长篇研报，先按章节拆分，再对每章生成摘要，然后提取核心数据和结论，汇总输出一份结构化的投研要点速览文档。
+    default_workflow_filename: rb20_r08.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r08_report.md
+  - id: "09"
+    tier: medium
+    name_zh: 竞品分析报告
+    requirement: 给我一份竞品公司的公开资料合集，帮我从中提取产品功能列表、定价策略、目标用户画像，做横向对比分析，最后输出竞品分析报告。
+    default_workflow_filename: rb20_r09.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r09_competitor_notes.txt
+  - id: "10"
+    tier: medium
+    name_zh: Python 代码审查与测试
+    requirement: 传入一段Python代码文件，先做静态分析识别潜在bug和代码异味，再按照PEP8规范重构，然后自动补写docstring和单元测试，最后输出修复后的代码和测试文件。
+    default_workflow_filename: rb20_r10.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r10_code.py
+  - id: "11"
+    tier: medium
+    name_zh: 工单意图与实体分析
+    requirement: 我有一批用户工单文本（JSON），帮我先做意图分类（咨询/投诉/建议/故障），再提取每条工单的关键实体（产品名、错误码、时间），然后按类别汇总统计生成一份工单分析报告。
+    default_workflow_filename: rb20_r11.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r11_tickets.json
+  - id: "12"
+    tier: medium
+    name_zh: 合同审查备忘录
+    requirement: 输入一份中文合同文本，先识别合同类型，再逐条提取核心条款（金额、期限、违约责任、知识产权归属），然后标注潜在风险条款并给出修改建议，输出一份合同审查备忘录。
+    default_workflow_filename: rb20_r12.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r12_contract.txt
+  - id: "13"
+    tier: medium
+    name_zh: 多源新闻综合简报
+    requirement: 给你几篇同主题的新闻稿，帮我做多源信息交叉比对，识别各报道之间的事实差异和立场倾向，去重合并后生成一篇客观中立的综合简报。
+    default_workflow_filename: rb20_r13.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r13_news.txt
+      - requirement_batch_io/fixtures/r13_source2.txt
+      - requirement_batch_io/fixtures/r13_source3.txt
+  - id: "14"
+    tier: medium
+    name_zh: 问卷开放题主题聚类
+    requirement: 我有一份问卷调查的开放性回答数据（几百条自由文本），先做主题聚类，再对每个主题提炼代表性观点并统计占比，然后生成带洞察结论的可视化分析报告。
+    default_workflow_filename: rb20_r14.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r14_survey_open.csv
+  - id: "15"
+    tier: medium
+    name_zh: PRD 拆解与排期
+    requirement: 输入一份产品需求文档PRD，先拆解功能模块，再为每个模块生成用户故事和验收标准，接着评估技术复杂度并给出优先级排序建议，最终输出一份迭代排期规划表。
+    default_workflow_filename: rb20_r15.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r15_prd.md
+  - id: "16"
+    tier: complex
+    name_zh: 电子书读书笔记
+    requirement: 给你一整本电子书的文本，先做全书章节结构识别和目录提取，再对每章生成详细摘要，然后提取全书核心论点和论证链条，接着识别各章节间的逻辑关系生成知识图谱描述，再从读者视角生成不同难度的阅读理解题，最后把上述所有内容整合为一份完整的读书笔记文档。
+    default_workflow_filename: rb20_r16.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r16_ebook.txt
+  - id: "17"
+    tier: complex
+    name_zh: 行业年报研究
+    requirement: 输入一个行业关键词和一组企业年报PDF（5~10份），先从每份年报中提取财务摘要（营收、利润、增速），再提取各公司的战略方向和业务布局描述，然后做行业横向对比分析，接着识别行业整体趋势和潜在风险，生成SWOT分析，最后综合产出一份图文并茂的行业研究报告。
+    default_workflow_filename: rb20_r17.yaml
+    fixture_hint: 多公司年报合并为单份 UTF-8 文本模拟。
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r17_annual_notes.txt
+      - requirement_batch_io/fixtures/r17_firm_delta.txt
+      - requirement_batch_io/fixtures/r17_firm_echo.txt
+  - id: "18"
+    tier: complex
+    name_zh: 代码仓库技术审查
+    requirement: 给我一个完整的代码仓库压缩包，先遍历文件结构生成项目架构概览，再按模块分析各文件的职责和依赖关系，然后检测代码质量问题和安全漏洞，接着评估测试覆盖率不足的模块并补写测试用例，再生成API接口文档，最后汇总输出一份包含架构图、质量评估、改进建议和完整文档的项目技术审查报告。
+    default_workflow_filename: rb20_r18.yaml
+    fixture_hint: 以目录说明 + 若干代表文件文本代替 zip。
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r18_repo_layout.txt
+      - requirement_batch_io/fixtures/r10_code.py
+  - id: "19"
+    tier: complex
+    name_zh: 课程本地化
+    requirement: 我要对一门线上课程做本地化：输入英文课程的全部素材（讲义Markdown、字幕SRT文件、测验题库JSON），先翻译讲义内容并适配中文语境做文化本地化调整，再翻译字幕并调整断句时间轴，然后翻译并改编测验题（包括干扰项重新设计），接着对全部翻译内容做术语一致性校验，再生成一份术语表和翻译质量自检报告，最后按原始目录结构输出全套本地化素材包。
+    default_workflow_filename: rb20_r19.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r19_course/r19_lecture.md
+      - requirement_batch_io/fixtures/r19_course/r19_subtitles.srt
+      - requirement_batch_io/fixtures/r19_course/r19_quiz.json
+  - id: "20"
+    tier: complex
+    name_zh: 用户增长分析
+    requirement: 输入一个SaaS产品的全量用户行为日志CSV和用户属性表，先做数据清洗和异常值处理，再构建用户行为漏斗并计算各环节转化率，然后做用户分群（RFM模型或行为聚类），接着对高流失风险群体做特征归因分析，再针对每个分群生成个性化的运营策略建议文案，然后把分析结论组织成管理层可读的叙事型报告，最后附上方法论说明和数据置信度评估，整体输出一份完整的用户增长分析报告包。
+    default_workflow_filename: rb20_r20.yaml
+    primary_fixtures:
+      - requirement_batch_io/fixtures/r20_events.csv
+      - requirement_batch_io/fixtures/r20_users.csv
+      - requirement_batch_io/fixtures/r20_funnel_steps.txt
+      - requirement_batch_io/fixtures/r20_rfm_params.txt

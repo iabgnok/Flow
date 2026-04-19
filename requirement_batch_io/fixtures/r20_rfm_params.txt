@@ -1,0 +1,2 @@
+RFM 阈值定义（逗号分隔 key=value）
+recency_days_max=90,frequency_events_min=3,monetary_usd_min=50

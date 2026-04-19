@@ -1,0 +1,38 @@
+# 结构示范：读文件 → LLM；任务说明经工作流 inputs 注入
+name: format_terminal_tail
+description: "（占位）"
+version: "1.0"
+
+inputs:
+  source_path:
+    type: string
+    description: file_reader 路径参数
+    required: true
+  analyze_instruction:
+    type: string
+    description: 透传给 llm_analyze.instruction
+    required: true
+
+outputs:
+  analysis_result:
+    type: string
+    description: "（占位）"
+    required: true
+
+steps:
+- id: 1
+  name: "（占位）"
+  action: file_reader
+  inputs:
+    file_path: "{{source_path}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: "（占位）"
+  action: llm_analyze
+  inputs:
+    content: "{{file_content}}"
+    instruction: "{{analyze_instruction}}"
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence

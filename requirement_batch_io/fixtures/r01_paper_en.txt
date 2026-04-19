@@ -1,0 +1,17 @@
+Title: On Tiny Language Models for Workflow Integration Testing
+
+Abstract. This note serves as a stand-in for an English academic paper body. We argue that deterministic UTF-8 fixtures accelerate regression testing when the execution stack only exposes text-oriented skills such as file_reader and llm_translate-style steps. Binary PDF ingestion would require separate adapters; here the “paper” is plain text so pipelines can be exercised without OCR.
+
+Keywords: workflow, integration testing, localization, fixtures
+
+Section 1. Introduction
+Continuous validation benefits from corpora that are small yet structurally realistic: titles, abstracts, sections, and keywords mirror real submissions while remaining diff-friendly in Git.
+
+Section 2. Method
+We compose synthetic sections with stable token boundaries so that translation or summarization steps have predictable anchors for golden checks in CI.
+
+Section 3. Limitations
+Results do not generalize to scanned documents or equations embedded as bitmaps.
+
+Section 4. Conclusion
+We recommend validating pipelines with small synthetic corpora before scaling to full proceedings-sized PDFs.

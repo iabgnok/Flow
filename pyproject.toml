@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+myflow = ["prompts/**/*"]
+
+[project]
+name = "myflow"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "typer[all]>=0.12",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "instructor>=1.0",
+    "anthropic>=0.40",
+    "openai>=1.50",
+    "ruamel.yaml>=0.18",
+    "simpleeval>=1.0",
+    "aiosqlite>=0.20",
+    "tenacity>=8.0",
+    "structlog>=24.0",
+]
+
+[project.scripts]
+myflow = "myflow.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "benchmark: 阶段4基准/质量（可选真实 LLM，见 tests/e2e/test_benchmark.py）",
+]
+
+[tool.coverage.run]
+source = ["src/myflow"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+omit = ["*/tests/*"]

@@ -1,0 +1,108 @@
+version: 1
+cases:
+  '01':
+    workflow: workflows/requirement_batch_20/rb20_r01.yaml
+    inputs:
+      pdf_path: requirement_batch_io/fixtures/r01_paper_en.txt
+      output_path: requirement_batch_io/runs/01/wf_out_0.txt
+  '02':
+    workflow: workflows/requirement_batch_20/rb20_r02.yaml
+    inputs:
+      input_csv_path: requirement_batch_io/fixtures/r02_reviews.csv
+      output_csv_path: requirement_batch_io/runs/02/wf_out_0.txt
+  '03':
+    workflow: workflows/requirement_batch_20/rb20_r03.yaml
+    inputs:
+      transcript_path: requirement_batch_io/fixtures/r03_meeting_transcript.txt
+  '04':
+    workflow: workflows/requirement_batch_20/rb20_r04.yaml
+    inputs:
+      product_name: requirement_batch_io/fixtures/r04_product.txt
+      core_selling_points: requirement_batch_io/fixtures/r04_product.txt
+      output_path: requirement_batch_io/runs/04/wf_out_0.txt
+  '05':
+    workflow: workflows/requirement_batch_20/rb20_r05.yaml
+    inputs:
+      interview_path: requirement_batch_io/fixtures/r05_interview.txt
+  '06':
+    workflow: workflows/requirement_batch_20/rb20_r06.yaml
+    inputs:
+      resume_path: requirement_batch_io/fixtures/r06_resume.txt
+      jd_path: requirement_batch_io/fixtures/r06_jd.txt
+      output_path: requirement_batch_io/runs/06/wf_out_0.txt
+  '07':
+    workflow: workflows/requirement_batch_20/rb20_r07.yaml
+    inputs:
+      excel_path: requirement_batch_io/fixtures/r07_products.csv
+      output_path: requirement_batch_io/runs/07/wf_out_0.txt
+  '08':
+    workflow: workflows/requirement_batch_20/rb20_r08.yaml
+    inputs:
+      source_path: requirement_batch_io/fixtures/r08_report.md
+      output_path: requirement_batch_io/runs/08/wf_out_0.txt
+  '09':
+    workflow: workflows/requirement_batch_20/rb20_r09.yaml
+    inputs:
+      source_path: requirement_batch_io/fixtures/r09_competitor_notes.txt
+      report_path: requirement_batch_io/runs/09/wf_out_0.md
+  '10':
+    workflow: workflows/requirement_batch_20/rb20_r10.yaml
+    inputs:
+      source_path: requirement_batch_io/fixtures/r10_code.py
+      output_code_path: requirement_batch_io/runs/10/wf_out_0.txt
+      output_test_path: requirement_batch_io/runs/10/wf_out_1.txt
+  '11':
+    workflow: workflows/requirement_batch_20/rb20_r11.yaml
+    inputs:
+      tickets_file: requirement_batch_io/fixtures/r11_tickets.json
+      report_path: requirement_batch_io/runs/11/wf_out_0.md
+  '12':
+    workflow: workflows/requirement_batch_20/rb20_r12.yaml
+    inputs:
+      contract_path: requirement_batch_io/fixtures/r12_contract.txt
+      output_path: requirement_batch_io/runs/12/wf_out_0.txt
+  '13':
+    workflow: workflows/requirement_batch_20/rb20_r13.yaml
+    inputs:
+      news_paths: 
+        requirement_batch_io/fixtures/r13_news.txt,requirement_batch_io/fixtures/r13_source2.txt,requirement_batch_io/fixtures/r13_source3.txt
+      output_path: requirement_batch_io/runs/13/wf_out_0.txt
+  '14':
+    workflow: workflows/requirement_batch_20/rb20_r14.yaml
+    inputs:
+      survey_data_path: requirement_batch_io/fixtures/r14_survey_open.csv
+      report_path: requirement_batch_io/runs/14/wf_out_0.md
+  '15':
+    workflow: workflows/requirement_batch_20/rb20_r15.yaml
+    inputs:
+      prd_path: requirement_batch_io/fixtures/r15_prd.md
+      output_path: requirement_batch_io/runs/15/wf_out_0.txt
+  '16':
+    workflow: workflows/requirement_batch_20/rb20_r16.yaml
+    inputs:
+      ebook_path: requirement_batch_io/fixtures/r16_ebook.txt
+      output_path: requirement_batch_io/runs/16/wf_out_0.txt
+  '17':
+    workflow: workflows/requirement_batch_20/rb20_r17.yaml
+    inputs:
+      industry_keyword: 
+        输入一个行业关键词和一组企业年报PDF（5~10份），先从每份年报中提取财务摘要（营收、利润、增速），再提取各公司的战略方向和业务布局描述，然后做行业横向对比分析，接着识别行业整体趋势和潜在风险，生成SWOT分析，最后综合产出一份图文并茂的行业研究报告。
+      pdf_paths: 
+        requirement_batch_io/fixtures/r17_annual_notes.txt,requirement_batch_io/fixtures/r17_firm_delta.txt,requirement_batch_io/fixtures/r17_firm_echo.txt
+      output_path: requirement_batch_io/runs/17/wf_out_0.txt
+  '18':
+    workflow: workflows/requirement_batch_20/rb20_r18.yaml
+    inputs:
+      zip_path: requirement_batch_io/fixtures/r18_repo_sample.zip
+      output_path: requirement_batch_io/runs/18/wf_out_0.md
+  '19':
+    workflow: workflows/requirement_batch_20/rb20_r19.yaml
+    inputs:
+      source_dir: requirement_batch_io/fixtures/r19_course
+      output_dir: requirement_batch_io/runs/19/wf_out_0.txt
+  '20':
+    workflow: workflows/requirement_batch_20/rb20_r20.yaml
+    inputs:
+      behavior_log_path: requirement_batch_io/fixtures/r20_events.csv
+      user_attributes_path: requirement_batch_io/fixtures/r20_users.csv
+      output_report_path: requirement_batch_io/runs/20/wf_out_0.md

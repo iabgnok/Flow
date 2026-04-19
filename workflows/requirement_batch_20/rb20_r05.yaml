@@ -1,0 +1,48 @@
+name: interview_analysis
+description: 分析用户访谈记录，提取关键需求点并归类输出
+version: '1.0'
+inputs:
+  interview_path:
+    type: string
+    description: 用户访谈记录文件路径
+    required: true
+    default:
+outputs:
+  analysis_result:
+    type: string
+    description: 提取的关键需求点分类结果
+    required: true
+    default:
+  confidence:
+    type: string
+    description: 分析置信度
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取访谈记录
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{interview_path}}'
+  outputs:
+    interview_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 提取并归类关键需求点
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{interview_content}}'
+    instruction: 
+      仔细分析这份用户访谈记录，提取所有关键需求点，并按以下类别进行归类：1.功能需求（用户明确要求的功能）2.体验需求（关于易用性、界面、交互的期望）3.性能需求（关于速度、稳定性、资源的要求）4.业务需求（与业务目标、流程相关的需求）。每个需求点应包含具体描述和来源（访谈中的相关表述）。请以结构化格式输出。
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

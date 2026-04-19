@@ -1,0 +1,80 @@
+name: analyze_csv_trends
+description: 读取 CSV 文件，分析数据趋势，生成分析报告
+version: '1.0'
+inputs:
+  csv_path:
+    type: string
+    description: CSV 文件路径
+    required: true
+    default:
+  output_path:
+    type: string
+    description: 报告输出路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 生成的报告路径
+    required: true
+    default:
+  analysis_result:
+    type: string
+    description: 分析结果文本
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取CSV文件
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{csv_path}}'
+  outputs:
+    file_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 分析数据趋势
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{file_content}}'
+    instruction: 分析 CSV 数据中的趋势、模式和关键发现。请包括：1. 数据概览 2. 主要趋势 3. 异常值或值得注意的点 4. 
+      建议或结论
+  outputs:
+    analysis_result: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 生成报告
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 基于分析结果生成一份结构化的数据分析报告
+    context: '{{analysis_result}}'
+  outputs:
+    generated_text: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 写入报告文件
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_path}}'
+    content: '{{generated_text}}'
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

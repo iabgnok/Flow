@@ -1,0 +1,65 @@
+# 格式：on_fail 回跳（验证失败回到生成）；占位串须按用户真实需求替换
+name: retry_loop
+description: "（占位）"
+version: "1.0"
+
+inputs:
+  file_path:
+    type: string
+    description: "（占位）"
+    required: true
+  output_path:
+    type: string
+    description: "（占位）"
+    required: true
+  generate_instruction:
+    type: string
+    description: 透传给 llm_generate.instruction
+    required: true
+  verify_criteria:
+    type: string
+    description: 透传给 llm_verify.criteria
+    required: true
+
+outputs:
+  report_path:
+    type: string
+    description: "（占位）"
+
+steps:
+- id: 1
+  name: "（占位）"
+  action: file_reader
+  inputs:
+    file_path: "{{file_path}}"
+  outputs:
+    file_content: file_content
+- id: 2
+  name: "（占位）"
+  action: llm_generate
+  inputs:
+    instruction: "{{generate_instruction}}"
+    context: "{{file_content}}"
+  outputs:
+    generated_text: generated_text
+- id: 3
+  name: "（占位）"
+  action: llm_verify
+  inputs:
+    artifact: "{{generated_text}}"
+    criteria: "{{verify_criteria}}"
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  on_fail: 2
+  max_retries: 3
+
+- id: 4
+  name: "（占位）"
+  action: file_writer
+  inputs:
+    file_path: "{{output_path}}"
+    content: "{{generated_text}}"
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written

@@ -1,0 +1,106 @@
+name: survey_open_answers_analysis
+description: 分析问卷调查开放性回答数据：主题聚类、提炼代表性观点、统计占比、生成可视化分析报告
+version: '1.0'
+inputs:
+  survey_data_path:
+    type: string
+    description: 问卷调查开放性回答数据文件路径（文本格式）
+    required: true
+    default:
+  report_path:
+    type: string
+    description: 分析报告输出文件路径
+    required: true
+    default:
+outputs:
+  report_path:
+    type: string
+    description: 生成的分析报告文件路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取调查数据
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{survey_data_path}}'
+  outputs:
+    survey_data: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 主题聚类分析
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{survey_data}}'
+    instruction: 对这份问卷调查的开放性回答数据进行主题聚类分析。请：1.识别出主要主题类别（建议3-8个主题）2.为每个主题命名并简要描述 
+      3.将每条回答归类到相应主题 4.统计每个主题的回答数量及占比。请以结构化格式输出，包含主题名称、描述、回答数量、占比和代表性回答示例。
+  outputs:
+    clustering_analysis: analysis_result
+    confidence: confidence
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 提炼代表性观点
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 基于以下主题聚类结果，为每个主题提炼2-3个最具代表性的核心观点或见解。每个观点应简洁明了，能反映该主题下回答的核心思想。
+    context: '{{clustering_analysis}}'
+  outputs:
+    key_insights: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 4
+  name: 生成可视化分析报告
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 
+      基于主题聚类分析和提炼的核心观点，生成一份完整的可视化分析报告。报告应包含：1.执行摘要（主要发现）2.主题分布概览（饼图/柱状图描述）3.每个主题的详细分析（名称、描述、占比、代表性观点）4.关键洞察与建议
+      5.数据可视化建议（建议使用哪些图表类型及理由）。请使用专业的商业分析报告格式，数据清晰，结论明确。
+    context: "主题聚类结果：{{clustering_analysis}}\n核心观点提炼：{{key_insights}}"
+  outputs:
+    analysis_report: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 5
+  name: 验证报告质量
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{analysis_report}}'
+    criteria: 报告必须：1.基于给定的主题聚类结果和核心观点提炼 
+      2.包含所有要求的章节（执行摘要、主题分布、详细分析、关键洞察、可视化建议）3.数据准确（占比计算与聚类结果一致）4.不包含与问卷调查无关的内容 
+      5.专业、清晰、可执行。
+  outputs:
+    verify_result: verify_result
+    passed: passed
+  condition:
+  on_fail: 4
+  max_retries: 2
+  workflow:
+- id: 6
+  name: 保存分析报告
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{report_path}}'
+    content: '{{analysis_report}}'
+  outputs:
+    report_path: report_path
+    bytes_written: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
