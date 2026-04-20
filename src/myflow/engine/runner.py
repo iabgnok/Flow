@@ -3,18 +3,20 @@ from __future__ import annotations
 import re
 import types
 import time
+from collections.abc import Callable
 from typing import Any, Union, get_args, get_origin
 from uuid import uuid4
 
 import structlog
 from simpleeval import NameNotDefined, simple_eval
-from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
+from tenacity import AsyncRetrying, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 from myflow.engine.models import RunResult, StepResult, WorkflowModel, WorkflowStep
 from myflow.engine.skill_registry import SkillNotFoundError, SkillRegistry
 from myflow.engine.validator import WorkflowValidator
 from myflow.infra.config import AppConfig
 from myflow.infra.state_store import StateStore
+from myflow.skills.base import SkillExecutionError
 
 log = structlog.get_logger(__name__)
 
@@ -55,10 +57,18 @@ class StepFailedError(RuntimeError):
 
 
 class Runner:
-    def __init__(self, registry: SkillRegistry, state_store: StateStore, config: AppConfig):
+    def __init__(
+        self,
+        registry: SkillRegistry,
+        state_store: StateStore,
+        config: AppConfig,
+        *,
+        on_step_result: Callable[[StepResult], None] | None = None,
+    ):
         self.registry = registry  # 技能注册表
         self.state_store = state_store  # 状态存储
         self.config = config  # 配置
+        self._on_step_result = on_step_result
         self.validator = WorkflowValidator()  # 工作流验证器
 
     # .run方法：执行工作流（入参：工作流定义模型，初始上下文，一次工作流执行的唯一标识）->（工作流）执行结果
@@ -131,14 +141,15 @@ class Runner:
                 # 跳过下一步执行技能步骤，继续执行下一个步骤；
                 if step.condition:
                     if not self._condition_true(step.condition, context):
-                        step_results.append(
-                            StepResult(
-                                step_id=step.id,
-                                step_name=step.name,
-                                action=step.action,
-                                status="skipped",
-                            )
+                        sr = StepResult(
+                            step_id=step.id,
+                            step_name=step.name,
+                            action=step.action,
+                            status="skipped",
                         )
+                        step_results.append(sr)
+                        if self._on_step_result:
+                            self._on_step_result(sr)
                         i += 1
                         continue
 
@@ -168,20 +179,25 @@ class Runner:
                     self._apply_step_outputs(step, output_dict, context)
                     # 记录步骤结果
                     step_duration_ms = int((time.monotonic() - step_start) * 1000)
-                    step_results.append(
-                        StepResult(
-                            step_id=step.id,
-                            step_name=step.name,
-                            action=step.action,
-                            status="success",
-                            outputs=output_dict,
-                            duration_ms=step_duration_ms,
-                        )
+                    sr = StepResult(
+                        step_id=step.id,
+                        step_name=step.name,
+                        action=step.action,
+                        status="success",
+                        outputs=output_dict,
+                        duration_ms=step_duration_ms,
                     )
+                    step_results.append(sr)
+                    if self._on_step_result:
+                        self._on_step_result(sr)
                     # 持久化步骤结果
                     await self.state_store.save_step(
                         run_id, step.id, "success", output_dict, context, duration_ms=step_duration_ms
                     )
+                    # 避免后续无关步骤仍看到上一轮 on_fail 的反馈（仅应在紧接回跳后的 LLM 步注入）
+                    context.pop("_prev_error", None)
+                    context.pop("_attempt", None)
+                    # 进度展示交给 CLI 的 on_step_result（可打印更友好的一行）
 
                 # 异常分支处理：
                 # 未知技能，硬失败，不重试
@@ -191,20 +207,22 @@ class Runner:
                 except Exception as e:
                     # 记录失败步骤结果
                     step_duration_ms = int((time.monotonic() - step_start) * 1000)
-                    step_results.append(
-                        StepResult(
-                            step_id=step.id,
-                            step_name=step.name,
-                            action=step.action,
-                            status="failed",
-                            error=str(e),
-                            duration_ms=step_duration_ms,
-                        )
+                    sr = StepResult(
+                        step_id=step.id,
+                        step_name=step.name,
+                        action=step.action,
+                        status="failed",
+                        error=str(e),
+                        duration_ms=step_duration_ms,
                     )
+                    step_results.append(sr)
+                    if self._on_step_result:
+                        self._on_step_result(sr)
                     # 持久化失败步骤结果
                     await self.state_store.save_step(
                         run_id, step.id, "failed", {"error": str(e)}, context, duration_ms=step_duration_ms
                     )
+                    # 进度展示交给 CLI 的 on_step_result（可打印更友好的一行）
 
                     # 根据on_fail重试逻辑处理（当step配置了on_fail时）[工作流级的重试逻辑]：
                     if step.on_fail is not None:
@@ -377,6 +395,7 @@ class Runner:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(3),
                 wait=wait_exponential(multiplier=1, max=10),
+                retry=retry_if_not_exception_type(SkillExecutionError),
                 reraise=True,
             ):
                 with attempt:

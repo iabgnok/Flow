@@ -17,7 +17,9 @@
 | P6 | `product_name` / `core_selling_point` 被填成**文件路径**而非正文（rb20_r04） | **批量脚本** `_infer_inputs` 语义分类错误 | 工作流把名称当 string 而非 path | **批量脚本**（已加夹具解析范例）；设计文档提示「文本型业务字段勿走 file 推断」 |
 | P7 | `SUMMARY.md` 在带 `--from-id` / `--skip-ids` 跑报告后，**执行列**与全量历史不一致 | **报告脚本语义**：单次运行覆盖写 SUMMARY | 用户误读为全量 E2E | 文档/脚本说明（非引擎）；可选「合并历史」模式 |
 | P8 | `rb20_r10` 单测文件无 `import` 被测模块仍标「成功」 | **成功定义过松**；无执行 pytest 的步骤 | LLM 惯例 | **阶段 2/4**：可选 `shell`/pytest 技能或 verify 要求「可导入」 |
+| P8b | 代码重构/补测后更换模块名或导入路径（如把输入 `r10_code.py` 改写成 `sample_module`，测试导入 `sample_module`） | **LLM**：未锚定“文件名/模块名必须保持”约束；verify 条件过松 | 夹具过简、生成步未给出明确锚点 | **阶段 4**：generate instruction 明确“保留原函数名/文件名/导入路径”；verify 只检查客观模式（不得出现新的模块名、导入必须指向输入文件） |
 | P9 | Composer 产出 **多步同 action + 同主输入**（例：rb20_r18 三步 `llm_analyze` 均 `content: '{{zip_content}}'`） | **Composer / Prompt**：步骤粒度规则在长需求、多维度枚举下易被覆盖 | 与 `composer_system.md` 已有合并条文并存 | **Prompt** 见 **§7**；**确定性兜底** 见 **§8**（`MERGEABLE_LLM_ANALYZE`） |
+| P10 | 产物中含「示例代码/打印语句不完整」导致不可直接运行（典型：f-string 未插入变量、`print` 未打印异常对象） | **LLM**：示例拼装易漏变量；verify 若仅做结构检查可能放过 | 文档类产物缺少“可复制运行”门禁 | **阶段 2/4**：在 generate instruction 中写死“示例代码必须可运行/打印变量值”；verify 仅检查客观模式（如 `f\"...{var}...\"` 中含 `{}`）或后续引入确定性 lint/执行技能 |
 
 ---
 
@@ -32,6 +34,7 @@
 | P5 目录读取 | 同 P4 + Composer 路径规则 §7.2 |
 | P6 批量语义 | `scripts/batch_requirement_e2e.py`（实现），设计 §13.4 指向本文档 |
 | P9 步骤合并 | `composer_system.md`「步骤粒度规则」；Prompt 备忘 **§7**；校验兜底 **§8** |
+| P10 示例代码可运行性 | `llm_generate` instruction/verify 的客观门禁；可选引入确定性 lint/执行能力（后续阶段） |
 
 ---
 
@@ -49,6 +52,7 @@
 - **10**：`runs/10/wf_out_0.txt`、`wf_out_1.txt` 存在但与 `fixtures/r10_code.py` 主题不对齐（P3）。
 - **12**：`runs/12/wf_out_0.txt` 含大量正文内 `{{...}}` 中文占位（P2）。
 - **13 / 17**：`*_last_run.json` 中 Step 1 读取失败，路径为逗号拼接串（P4）。
+- **18**：`runs/18/wf_out_0.md` 的 API 文档示例中出现 `print(f\"…\")` 未插入变量值（P10）。
 
 ---
 
@@ -235,6 +239,34 @@
 
 完整文件见：`workflows/requirement_batch_20/rb20_r18.yaml`。
 
+#### 8.3.1 端到端执行：`myflow run`（batch 18 / `rb20_r18`）失败复盘
+
+本节记录 **工作流 YAML 已通过校验、实际 `myflow run`** 时的失败形态（与 **§8.3** 侧重「Composer 合并 / `MERGEABLE_LLM_ANALYZE`」互补）。复现条件与批量一致：`requirement_batch_io/run_specs.yaml` 中 id **`18`** 的 `inputs`（`zip_path`、`output_path`），夹具 **`requirement_batch_io/fixtures/r18_repo_sample.zip`**，模型 **DeepSeek**（`api.deepseek.com`）。
+
+**失败落点：** 在 **「测试用例质量」** 对应的 **`llm_verify`** 步多次 **`passed: false`**，触发 `on_fail` 回跳与 `max_retries` 用尽后整次 run **`failed`**；若始终卡在该 verify，后续 **API 文档 verify** 等步可能未轮到或同样进入重试链。（具体 **step id** 以仓库内当时版本的 `rb20_r18.yaml` 为准；**§8.3** 表格为骨架示意。）
+
+**`verify_result` 多轮比对结论：**
+
+| 观察 | 含义 |
+|------|------|
+| **各轮主旨高度一致** | 不是「每轮换一个完全不同的扣分点」式的质检漂移；核心矛盾集中在同一类合规叙述上。 |
+| **高频扣分点** | ① 待检内容**难以被认定**已针对「分析报告中点名的、测试覆盖不足的模块」；② 生成侧易出现 **`add()` 等偏通用**的测试示例，被判与仓库语境/报告绑定不足；③ `criteria` 若强依赖「分析报告中的点名」，而质检侧对 **artifact 的可见信息量** 不足时，易落成「正文里必须出现报告措辞/引用」的**偏严**解读。 |
+
+**归因（引擎 / 编排 / 提示）：**
+
+| 类型 | 说明 |
+|------|------|
+| **反馈回路（主因）** | Runner 在 `on_fail` 时会写入 `context["_prev_error"]`，但 **`llm_generate` 默认不会读取**；若 YAML 未在 `instruction`/`context` 中显式内插 `{{_prev_error}}`（及可选 `{{_attempt}}`），重试近似**盲改**，与「每轮报同类问题却改不动」的形态一致。 |
+| **判据与信息量（次因）** | 若 `criteria` 要求「必须针对分析报告指出的模块」，建议在 **`artifact` 中同时附上**可对照的分析摘要/片段（或收紧 `criteria` 为仅凭测试代码与已给材料可检查的条目），否则 verify 模型容易**过度依赖**「待检字符串里是否像抄了报告」。 |
+| **线性步骤编排** | `on_fail` 仅将执行指针跳回较早步骤 **id**；其后仍按步骤 **id 递增**执行中间步。若「仅测试 verify」失败而中间仍夹 **「生成 API 文档」** 等步，会**无谓重复生成**并带来内容漂移成本。缓解：让 **verify 紧挨**对应 **generate**，或拆 **子工作流** 使失败回跳范围局部化。 |
+| **引擎层（已修）** | 技能级 `AsyncRetrying` 曾对**所有**异常重试，导致 `SkillExecutionError`（含 verify 业务失败）在同一轮内**多次调用模型**、日志条数放大；现对 **`SkillExecutionError` 不再做 tenacity 重试**（`src/myflow/engine/runner.py`）。 |
+
+**建议（落地优先级）：**
+
+1. **YAML**：为处于 `on_fail` 环内的 **`llm_generate`** 增加对 `{{_prev_error}}` / `{{_attempt}}` 的引用；并调整步骤顺序或子工作流，避免「修测试却反复重跑 API 生成」。  
+2. **`llm_verify`**：保证 `artifact`（及 `criteria`）与「须引用分析报告」类要求**信息量匹配**（例如 artifact 内结构化拼接「分析报告摘要 + 测试正文」——仓库内 YAML 若已演进，以当前文件为准）。  
+3. **Composer / `composer_system.md`**：在「verify + `on_fail`」few-shot 中显式示范 **`_prev_error` 回流**写法，降低漏配率。
+
 ### 8.4 边界情况：`condition`、语义拆步与校验的关系
 
 | 问题 | 当前行为 |
@@ -317,6 +349,7 @@
 |----|------|------|
 | **01**（翻译验证） | 验证模型主观认为「不够论文体」等，与夹具是否像真论文有关，**忠实原文**也难写成机械标准 | **夹具**：换更接近目标的英文材料；**流程**：翻译类任务可考虑**不做 verify** 或把 criteria **限定为可客观检查的条件**（如长度下限、章节标题不删）；**Composer**：可建议弱主观场景少配 verify。 |
 | **10**（测试代码） | 生成测试 **import 了夹具中不存在的符号**——属 **生成步**问题，而非 verify 逻辑假阳性 | 在 **`llm_generate`** 系统提示中强调：测试代码的 **import 须与参考资料中真实模块/符号一致**（见 `llm_call.py`）；Composer 也可在生成测试的步骤 instruction 里显式绑定源路径对应的模块名。 |
+| **18**（代码仓审查） | **`llm_verify`（测试用例质量）** 多轮不通过：多轮 `verify_result` 主旨一致，扣分集中在「未显式绑定分析报告中的低覆盖模块 / 测试偏通用」等；若未回流 `_prev_error` 则重试偏盲；线性编排可致 **API 文档被连带重生成** | 见 **§8.3.1**；YAML 补 `{{_prev_error}}`、调整 verify 与 generate 的邻接/子工作流、`artifact` 与 `criteria` 信息量对齐；引擎侧 **`SkillExecutionError` 不再技能级三连重试** 已减轻噪声与成本 |
 
 ### 10.4 推荐执行顺序（与成本一致）
 
@@ -350,7 +383,7 @@
 |----|----------------------|----------------|
 | **01** | 无关 | **`llm_verify`（翻译质量）**，见 **§10.3** |
 | **10** | 无关 | **`llm_verify`（测试质量）**，见 **§10.3** |
-| **18** | **读入与 CLI 已通**（`output_path` + zip 夹具） | Step 5 **`llm_verify`（测试用例质量）**，非 `file_reader` |
+| **18** | **读入与 CLI 已通**（`output_path` + zip 夹具） | **测试用例相关 `llm_verify`** 多轮不通过与编排/反馈问题，见 **§8.3.1**（非 `file_reader`） |
 
 **维护：** 若需与 `SUMMARY.md` 中分条「成功/失败」及 `XX_last_run.json` **完全一致**，请在项目根重跑并覆写汇总：
 

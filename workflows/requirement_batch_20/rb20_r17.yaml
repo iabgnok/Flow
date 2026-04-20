@@ -52,7 +52,7 @@ steps:
       3. 业务布局：主要业务板块、产品线、市场分布\n\n请按公司名称组织输出，确保数据准确，对于无法提取的信息标注'未提及'"
   outputs:
     extracted_data: analysis_result
-    confidence: confidence
+    extract_confidence: confidence
   condition:
   on_fail:
   max_retries: 3
@@ -67,7 +67,7 @@ steps:
       3. 竞争力分析：各公司在行业中的相对位置和竞争优势"
   outputs:
     comparison_analysis: analysis_result
-    confidence: confidence
+    compare_confidence: confidence
   condition:
   on_fail:
   max_retries: 3
@@ -82,7 +82,7 @@ steps:
       3. 机遇窗口期（新兴市场、技术突破、政策红利等）"
   outputs:
     trends_risks: analysis_result
-    confidence: confidence
+    trends_confidence: confidence
   condition:
   on_fail:
   max_retries: 3
@@ -108,10 +108,10 @@ steps:
   inputs:
     artifact: '{{swot_analysis}}'
     criteria: 
-      SWOT分析必须包含明确的优势、劣势、机会、威胁四个部分；每个部分应有具体条目；分析应基于前述的公司数据和行业趋势，不得脱离主题；不得出现未替换的占位符或与{{industry_keyword}}行业无关的内容
+      SWOT须含优势、劣势、机会、威胁四块；每块至少两条具体条目；内容须与行业关键词「{{industry_keyword}}」相关，不得明显跑题到其他行业；不得出现未替换占位符。
   outputs:
-    verify_result: verify_result
-    passed: passed
+    swot_verify_result: verify_result
+    swot_passed: passed
   condition:
   on_fail: 5
   max_retries: 2
@@ -138,10 +138,10 @@ steps:
   inputs:
     artifact: '{{report_content}}'
     criteria: 
-      报告必须包含所有要求的7个章节；应有图表描述；内容应基于前述分析数据，不得虚构或偏离主题；不得出现未替换的占位符；Markdown格式正确
+      报告须显式包含 7 个章节标题或等价结构（行业概况、财务摘要、战略对比、横向分析、趋势与风险、SWOT、结论与建议）；须有图表或表格类描述；Markdown 层级合理；不得出现未替换占位符；不得整篇为空壳套话。
   outputs:
-    verify_result: verify_result
-    passed: passed
+    report_verify_result: verify_result
+    report_passed: passed
   condition:
   on_fail: 7
   max_retries: 2

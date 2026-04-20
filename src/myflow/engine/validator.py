@@ -38,7 +38,9 @@ class WorkflowValidator:
         self._check_outputs_declared(workflow, report)
         self._check_output_field_mappings(workflow, available_skills, skill_output_fields, report)
         self._check_variable_reachability(workflow, report)
+        self._check_unique_step_output_keys(workflow, report)
         self._check_on_fail_targets(workflow, report)
+        self._check_overlapping_retry_loops(workflow, report)
         self._check_retries(workflow, report)
         self._check_template_residue(workflow, report)
         self._check_single_brace_placeholders(workflow, report)
@@ -163,6 +165,27 @@ class WorkflowValidator:
                         )
             available.update((step.outputs or {}).keys())
 
+    def _check_unique_step_output_keys(self, wf: WorkflowModel, r: ValidationReport) -> None:
+        """提示 outputs key 重复（后序覆盖前序）。
+
+        说明：
+        - 覆盖在 Runner 语义上是允许的（后者为准），某些用例（如串行 sub_workflow、分阶段生成同名产物）
+          依赖该行为。
+        - 但对 LLM 生成的 YAML 来说，同名覆盖常是“忘了换变量名”的失误，因此这里保留为 warning 以便提示。
+        """
+        first_owner: dict[str, int] = {}
+        for step in sorted(wf.steps, key=lambda s: s.id):
+            for ctx_key in (step.outputs or {}).keys():
+                if ctx_key in first_owner:
+                    r.add_warning(
+                        "DUPLICATE_CONTEXT_OUTPUT_KEY",
+                        f"上下文变量 '{ctx_key}' 已在步骤 {first_owner[ctx_key]} 的 outputs 中声明，步骤 {step.id} 再次声明会导致覆盖。",
+                        step_id=step.id,
+                        suggestion="为每步使用不同的上下文键名（例如 test_verify_result / api_verify_result）。",
+                    )
+                else:
+                    first_owner[ctx_key] = step.id
+
     def _check_on_fail_targets(self, wf: WorkflowModel, r: ValidationReport) -> None:
         all_ids = {step.id for step in wf.steps}
         for step in wf.steps:
@@ -181,6 +204,35 @@ class WorkflowValidator:
                     step_id=step.id,
                     suggestion="on_fail 只能向前跳转，形成重试循环",
                 )
+
+    def _check_overlapping_retry_loops(self, wf: WorkflowModel, r: ValidationReport) -> None:
+        """检测 on_fail 重试区间在执行序上是否交叉（交叉则回跳会重跑无关步骤）。"""
+        steps_sorted = sorted(wf.steps, key=lambda s: s.id)
+        id_to_index = {s.id: i for i, s in enumerate(steps_sorted)}
+        loops: list[tuple[int, int, int]] = []  # (lo_idx, hi_idx, verify_step_id)
+        for step in wf.steps:
+            if step.on_fail is None:
+                continue
+            if step.on_fail not in id_to_index or step.id not in id_to_index:
+                continue
+            lo = id_to_index[step.on_fail]
+            hi = id_to_index[step.id]
+            if lo > hi:
+                lo, hi = hi, lo
+            loops.append((lo, hi, step.id))
+
+        for i, (lo1, hi1, sid1) in enumerate(loops):
+            for lo2, hi2, sid2 in loops[i + 1 :]:
+                if lo1 < lo2 < hi1 < hi2 or lo2 < lo1 < hi2 < hi1:
+                    r.add_error(
+                        "OVERLAPPING_RETRY_LOOPS",
+                        f"步骤 {sid1} 的重试区间（执行序 [{lo1},{hi1}]）与步骤 {sid2} 的重试区间（[{lo2},{hi2}]）交叉。"
+                        "回跳时会经过不相关的步骤并重复执行。请将每个「生成→验证」成对紧邻排列，"
+                        "且各验证步的 on_fail 仅指向本组的生成步。",
+                        step_id=sid2,
+                        suggestion="推荐顺序：生成A → 验证A(on_fail→A) → 生成B → 验证B(on_fail→B)；"
+                        "或嵌套大环套小环，避免两环部分重叠。",
+                    )
 
     def _check_retries(self, wf: WorkflowModel, r: ValidationReport) -> None:
         for step in wf.steps:

@@ -1,5 +1,5 @@
-name: python_code_refactor
-description: 对Python代码进行静态分析、重构、补写文档和单元测试
+name: python_code_refactor_and_test
+description: 对Python代码进行静态分析、PEP8重构、补写docstring和单元测试
 version: '1.0'
 inputs:
   source_path:
@@ -30,39 +30,56 @@ outputs:
     default:
 steps:
 - id: 1
-  name: 读取Python源代码
+  name: 读取Python代码
   action: file_reader
   description: ''
   inputs:
     file_path: '{{source_path}}'
   outputs:
-    code: file_content
+    source_code: file_content
   condition:
   on_fail:
   max_retries: 3
   workflow:
 - id: 2
-  name: 静态分析识别问题
+  name: 静态分析并列出问题清单
   action: llm_analyze
   description: ''
   inputs:
-    content: '{{code}}'
-    instruction: 
-      对这段Python代码进行静态分析，识别：1.潜在bug（如空指针、逻辑错误、边界条件）2.代码异味（如重复代码、过长函数、复杂条件）3.PEP8规范违反项（如命名、缩进、行长度）4.缺少的文档字符串。按这四个方面结构化输出。
+    content: '{{source_code}}'
+    instruction: |
+      对以下Python代码做静态分析并输出问题清单：
+      1) 潜在 bug（异常未处理、逻辑错误、边界条件）
+      2) 代码异味（过长函数、重复代码、复杂条件）
+      3) PEP8/可读性问题（命名、行长度、缩进等）
+      输出为条目清单即可，不要输出重构后的完整代码。
   outputs:
-    analysis: analysis_result
+    issues_report: analysis_result
+    analysis_confidence: confidence
   condition:
   on_fail:
   max_retries: 3
   workflow:
 - id: 3
-  name: 重构代码
+  name: PEP8重构并输出完整代码
   action: llm_generate
   description: ''
   inputs:
-    instruction: 基于以下分析结果，按照PEP8规范重构这段Python代码。修复所有识别出的问题，包括：1.修正潜在bug 2.消除代码异味 
-      3.遵循PEP8规范 4.为所有函数和类添加完整的docstring。只输出重构后的完整代码，不要包含额外解释。
-    context: "原始代码：{{code}}\n\n分析结果：{{analysis}}"
+    instruction: |
+      基于参考资料中的原始代码与问题清单，对代码进行PEP8与可读性重构并输出“完整可运行”的Python代码。
+      要求：
+      - 保持原有功能不变
+      - 不要更换为无关的新模块/新主题
+      - 不要随意重命名对外可见的函数/类（除非明显拼写错误且能保持兼容）
+      - 直接输出最终代码正文（不要解释过程）
+    context: |
+      【原始代码】
+      {{source_code}}
+
+      ---
+
+      【问题清单】
+      {{issues_report}}
   outputs:
     refactored_code: generated_text
   condition:
@@ -70,65 +87,104 @@ steps:
   max_retries: 3
   workflow:
 - id: 4
-  name: 验证重构质量
+  name: 验证重构代码（基础门禁）
   action: llm_verify
   description: ''
   inputs:
     artifact: '{{refactored_code}}'
-    criteria: 重构后的代码必须：1.基于原始代码逻辑，不得替换为无关主题 2.修复分析中识别的所有问题 3.遵循PEP8规范 
-      4.包含完整的docstring 5.保持原始功能不变。代码中不得出现未替换的{...}或<待填写>占位符。
+    criteria: |
+      必须是完整的Python代码文本；不得为空；
+      不含未替换的占位符（如 {{...}}、{{{{...}}}}、<待填写>、TBD 等）。
   outputs:
-    verify_result: verify_result
-    passed: passed
+    refactor_verify_result: verify_result
+    refactor_passed: passed
   condition:
   on_fail: 3
   max_retries: 2
   workflow:
 - id: 5
+  name: 补写docstring
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: |
+      为以下Python代码的所有函数和类补写docstring，遵循Google风格文档字符串格式，
+      包含参数说明、返回值说明和可能的异常说明。直接输出补全后的完整代码。
+    context: '{{refactored_code}}'
+  outputs:
+    code_with_docstring: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 6
+  name: 验证docstring（基础门禁）
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{code_with_docstring}}'
+    criteria: |
+      代码必须是完整的Python代码；不得为空；
+      不含未替换的占位符（如 {{...}}、{{{{...}}}}、<待填写>、TBD 等）。
+  outputs:
+    docstring_verify_result: verify_result
+    docstring_passed: passed
+  condition:
+  on_fail: 5
+  max_retries: 2
+  workflow:
+- id: 7
   name: 生成单元测试
   action: llm_generate
   description: ''
   inputs:
-    instruction: 为以下重构后的Python代码生成完整的单元测试。测试应覆盖：1.所有函数的主要功能 2.边界条件 
-      3.异常情况。使用pytest框架，测试文件名应与原文件对应（如原文件为module.py，测试文件为test_module.py）。只输出测试代码，不要额外解释。
-    context: 重构后的代码：{{refactored_code}}
+    instruction: |
+      为以下Python代码生成一个pytest单元测试文件，要求：
+      1) 包含必要的import语句（import路径与符号名必须与代码中实际存在的名称一致）
+      2) 每个可测试的函数至少一个测试用例
+      3) 使用assert
+      4) 覆盖至少一个边界条件或异常情况
+      直接输出完整测试文件代码（不要解释）。
+    context: '{{code_with_docstring}}'
   outputs:
     test_code: generated_text
   condition:
   on_fail:
   max_retries: 3
   workflow:
-- id: 6
-  name: 验证测试质量
+- id: 8
+  name: 验证测试代码（基础门禁）
   action: llm_verify
   description: ''
   inputs:
     artifact: '{{test_code}}'
-    criteria: 单元测试必须：1.针对重构代码中的函数和类编写 2.使用pytest框架 3.包含合理的测试用例 
-      4.测试文件名格式正确（test_*.py）。测试代码中不得出现未替换的{...}或<待填写>占位符。
+    criteria: |
+      测试代码必须是完整的Python文件文本；不得为空；
+      包含至少一个以 test_ 开头的测试函数；包含 assert；
+      不含未替换的占位符（如 {{...}}、{{{{...}}}}、<待填写>、TBD 等）。
   outputs:
     test_verify_result: verify_result
     test_passed: passed
   condition:
-  on_fail: 5
+  on_fail: 7
   max_retries: 2
   workflow:
-- id: 7
+- id: 9
   name: 保存重构代码
   action: file_writer
   description: ''
   inputs:
     file_path: '{{output_code_path}}'
-    content: '{{refactored_code}}'
+    content: '{{code_with_docstring}}'
   outputs:
     refactored_code_path: report_path
-    bytes_written: bytes_written
+    code_bytes: bytes_written
   condition:
   on_fail:
   max_retries: 3
   workflow:
-- id: 8
-  name: 保存单元测试
+- id: 10
+  name: 保存测试文件
   action: file_writer
   description: ''
   inputs:
@@ -136,7 +192,7 @@ steps:
     content: '{{test_code}}'
   outputs:
     test_file_path: report_path
-    bytes_written: bytes_written
+    test_bytes: bytes_written
   condition:
   on_fail:
   max_retries: 3

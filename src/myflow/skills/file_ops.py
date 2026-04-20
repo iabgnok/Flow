@@ -354,18 +354,110 @@ class MultiFileReaderSkill(FileReaderSkill):
 
 
 class FileWriterInput(BaseModel):
-    file_path: str
-    content: str
+    """写入本地文件：支持单路径、逗号分隔多路径、显式 paths、或批量 writes。"""
+
+    path: str | None = Field(default=None, description="目标文件路径（兼容新写法，与 file_path 等价；支持逗号分隔多路径）")
+    file_path: str | None = Field(default=None, description="兼容旧版，与 path 等价")
+    paths: list[str] | None = Field(default=None, description="显式多路径列表：将同一 content 写入多个文件")
+    content: str | None = Field(default=None, description="写入内容（单路径或 paths 时必填）")
+
+    mode: str = Field(
+        default="overwrite",
+        description="写入模式：overwrite(覆盖)、append(追加)、create(仅当不存在时创建)",
+    )
+    encoding: str = Field(default="utf-8", description="文本编码（默认 utf-8）")
+    ensure_trailing_newline: bool = Field(default=False, description="若为 True，确保文件末尾有换行")
+    create_parents: bool = Field(default=True, description="是否自动创建父目录")
+
+    # 批量写入：每条可独立指定 mode/encoding 等；与 path/file_path/paths 互斥
+    writes: list[dict[str, object]] | None = Field(
+        default=None,
+        description="批量写入：[{path, content, mode?, encoding?, ensure_trailing_newline?, create_parents?}]",
+    )
+
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _coerce_paths(cls, v: object) -> list[str] | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        raise TypeError("paths 须为字符串列表或逗号分隔字符串")
+
+    @field_validator("mode")
+    @classmethod
+    def _validate_mode(cls, v: str) -> str:
+        vv = (v or "").strip().lower()
+        if vv not in {"overwrite", "append", "create"}:
+            raise ValueError("mode 必须为 overwrite / append / create")
+        return vv
+
+    @model_validator(mode="after")
+    def _comma_split_path(self) -> FileWriterInput:
+        raw = (self.path or self.file_path or "").strip()
+        if self.paths is None and raw and "," in raw:
+            parts = [p.strip() for p in raw.split(",") if p.strip()]
+            if len(parts) > 1:
+                self.paths = parts
+                self.path = None
+                self.file_path = None
+        return self
+
+    @model_validator(mode="after")
+    def _validate_shapes(self) -> FileWriterInput:
+        has_single = bool((self.path or self.file_path or "").strip())
+        has_paths = bool(self.paths)
+        has_writes = bool(self.writes)
+
+        if sum([1 if has_single else 0, 1 if has_paths else 0, 1 if has_writes else 0]) != 1:
+            raise ValueError("必须且只能提供一种写入方式：path/file_path 或 paths 或 writes")
+
+        if has_writes:
+            # writes 模式：每条必须至少有 path+content
+            assert self.writes is not None
+            if len(self.writes) == 0:
+                raise ValueError("writes 不能为空")
+            for i, w in enumerate(self.writes):
+                if not isinstance(w, dict):
+                    raise TypeError(f"writes[{i}] 必须为对象")
+                p = str(w.get("path") or w.get("file_path") or "").strip()
+                if not p:
+                    raise ValueError(f"writes[{i}].path 不能为空")
+                if "content" not in w:
+                    raise ValueError(f"writes[{i}].content 必填")
+            return self
+
+        # 单路径 / 多路径共享 content
+        if self.content is None:
+            raise ValueError("content 必填")
+        if has_paths and not self.paths:
+            raise ValueError("paths 不能为空")
+        if has_single:
+            raw = (self.path or self.file_path or "").strip()
+            if not raw:
+                raise ValueError("path/file_path 不能为空")
+        return self
 
 
 class FileWriterOutput(BaseModel):
+    # 兼容旧工作流字段（单路径时填充；多路径时 report_path 取第一个）
     report_path: str
     bytes_written: int
+
+    # 新字段：更适合批量与下游拼装
+    report_paths: list[str] = Field(default_factory=list, description="写入的全部路径（按执行顺序）")
+    bytes_written_total: int = Field(default=0, description="所有写入的字节数总和")
+    file_count: int = Field(default=0, description="写入的文件数")
 
 
 class FileWriterSkill(Skill):
     name = "file_writer"
-    description = "将内容写入本地文件，返回写入路径和字节数"
+    description = (
+        "将内容写入本地文件：支持单路径、逗号分隔/paths 批量写入、以及 writes 明细批量写入；"
+        "支持 overwrite/append/create 模式；返回写入路径与字节数。"
+    )
     when_to_use = "需要保存生成的报告、代码、配置等到文件时"
     do_not_use_when = "读取文件（使用 file_reader）"
     idempotent = False
@@ -373,16 +465,89 @@ class FileWriterSkill(Skill):
     output_model = FileWriterOutput
 
     async def execute(self, inputs: FileWriterInput, context: dict) -> FileWriterOutput:
-        raw = (inputs.file_path or "").strip()
-        if not raw:
-            raise SkillExecutionError(
-                "写入路径为空：请检查工作流是否缺少必填输入（例如 output_path），"
-                "且 --input 参数名与工作流定义的 inputs 一致。"
-            )
         try:
-            path = Path(raw)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            written = path.write_text(inputs.content, encoding="utf-8")
+            jobs: list[tuple[Path, str, str, str, bool, bool]] = []
+            if inputs.writes:
+                for w in inputs.writes:
+                    assert isinstance(w, dict)
+                    p_raw = str(w.get("path") or w.get("file_path") or "").strip()
+                    content = str(w.get("content") if w.get("content") is not None else "")
+                    mode = str(w.get("mode") or inputs.mode).strip().lower()
+                    if mode not in {"overwrite", "append", "create"}:
+                        raise SkillExecutionError(f"writes.mode 非法: {mode!r}")
+                    encoding = str(w.get("encoding") or inputs.encoding)
+                    etn = bool(
+                        w.get("ensure_trailing_newline")
+                        if w.get("ensure_trailing_newline") is not None
+                        else inputs.ensure_trailing_newline
+                    )
+                    cp = bool(
+                        w.get("create_parents")
+                        if w.get("create_parents") is not None
+                        else inputs.create_parents
+                    )
+                    jobs.append((Path(p_raw), content, mode, encoding, etn, cp))
+            else:
+                content = str(inputs.content or "")
+                targets: list[str]
+                if inputs.paths:
+                    targets = list(inputs.paths)
+                else:
+                    targets = [str((inputs.path or inputs.file_path or "").strip())]
+                for t in targets:
+                    jobs.append(
+                        (
+                            Path(str(t).strip()),
+                            content,
+                            inputs.mode,
+                            inputs.encoding,
+                            inputs.ensure_trailing_newline,
+                            inputs.create_parents,
+                        )
+                    )
+
+            report_paths: list[str] = []
+            bytes_written_list: list[int] = []
+            for path, content, mode, encoding, ensure_nl, create_parents in jobs:
+                raw = str(path).strip()
+                if not raw:
+                    raise SkillExecutionError(
+                        "写入路径为空：请检查工作流是否缺少必填输入（例如 output_path），"
+                        "且 --input 参数名与工作流定义的 inputs 一致。"
+                    )
+                p = Path(raw).expanduser()
+                if create_parents:
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                if ensure_nl and content and not content.endswith("\n"):
+                    content = content + "\n"
+
+                if mode == "create":
+                    if p.exists():
+                        raise SkillExecutionError(f"目标已存在（mode=create 禁止覆盖）: {p}")
+                    written = p.write_text(content, encoding=encoding)
+                elif mode == "append":
+                    # append: 使用文本追加；若文件不存在则创建
+                    with p.open("a", encoding=encoding, newline="") as f:
+                        f.write(content)
+                    written = len(content.encode(encoding, errors="replace"))
+                else:
+                    # overwrite
+                    written = p.write_text(content, encoding=encoding)
+
+                report_paths.append(str(p))
+                bytes_written_list.append(int(written))
+
+            first_path = report_paths[0] if report_paths else ""
+            first_written = bytes_written_list[0] if bytes_written_list else 0
+            total = sum(bytes_written_list)
+            return FileWriterOutput(
+                report_path=first_path,
+                bytes_written=first_written,
+                report_paths=report_paths,
+                bytes_written_total=total,
+                file_count=len(report_paths),
+            )
+        except SkillExecutionError:
+            raise
         except Exception as e:
-            raise SkillExecutionError(f"写入文件失败: {inputs.file_path}: {e}") from e
-        return FileWriterOutput(report_path=str(path), bytes_written=written)
+            raise SkillExecutionError(f"写入文件失败: {e}") from e

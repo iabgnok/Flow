@@ -1,15 +1,15 @@
-name: code_repository_technical_review
-description: 对代码仓库压缩包进行完整技术审查：分析架构、模块职责、代码质量、安全漏洞、测试覆盖率，生成API文档并输出综合报告
+name: code_repo_technical_review
+description: 对代码仓库压缩包进行完整技术审查：分析架构、检测问题、补写测试、生成文档，输出综合报告
 version: '1.0'
 inputs:
-  zip_path:
+  repo_zip_path:
     type: string
-    description: 代码仓库压缩包文件路径
+    description: 代码仓库压缩包路径
     required: true
     default:
-  output_path:
+  output_report_path:
     type: string
-    description: 技术审查报告输出路径
+    description: 输出技术审查报告路径
     required: true
     default:
 outputs:
@@ -20,52 +20,39 @@ outputs:
     default:
 steps:
 - id: 1
-  name: 读取压缩包内容
+  name: 读取代码仓库
   action: file_reader
   description: ''
   inputs:
-    file_path: '{{zip_path}}'
+    file_path: '{{repo_zip_path}}'
   outputs:
-    zip_content: file_content
+    repo_content: file_content
+    file_count: file_count
   condition:
   on_fail:
   max_retries: 3
   workflow:
 - id: 2
-  name: 综合分析代码仓库
+  name: 综合分析架构与质量
   action: llm_analyze
   description: ''
   inputs:
-    content: '{{zip_content}}'
-    instruction: "分析以下代码仓库压缩包内容，一次性完成以下所有维度的分析并分段输出：\n1. 项目文件结构概览和整体架构\n2. 各模块职责和依赖关系分析\n\
-      3. 代码质量问题检测（如代码重复、复杂度过高、命名不规范等）\n4. 安全漏洞识别（如SQL注入、XSS、硬编码凭证等）\n5. 测试覆盖率评估（指出哪些模块缺少测试或测试不足）\n\
-      \n请按上述编号顺序结构化输出分析结果，每个部分用清晰的标题分隔。"
+    content: '{{repo_content}}'
+    instruction: 一次性完成以下分析并分段输出：1.项目文件结构概览与架构图描述（用Mermaid格式） 2.各模块职责和依赖关系分析 3.代码质量问题（如重复代码、复杂度过高、坏味道）
+      4.安全漏洞检测（如硬编码密钥、SQL注入风险、XSS漏洞） 5.测试覆盖率评估（指出哪些模块缺少测试）
   outputs:
     full_analysis: analysis_result
+    analysis_confidence: confidence
   condition:
   on_fail:
   max_retries: 3
   workflow:
 - id: 3
-  name: 生成测试用例
-  action: llm_generate
-  description: ''
-  inputs:
-    instruction: 基于上述分析中识别出的测试覆盖率不足的模块，为这些模块补写完整的测试用例。确保测试用例覆盖核心功能、边界条件和异常场景。
-    context: '{{full_analysis}}'
-  outputs:
-    test_cases: generated_text
-  condition:
-  on_fail:
-  max_retries: 3
-  workflow:
-- id: 4
   name: 生成API接口文档
   action: llm_generate
   description: ''
   inputs:
-    instruction: "基于代码仓库中的API接口定义，生成完整的API接口文档，包括：\n1. 接口端点列表\n2. 请求方法、路径和参数说明\n3.
-      请求/响应示例\n4. 错误码定义\n5. 认证和授权要求"
+    instruction: 基于代码仓库内容，生成完整的API接口文档，包含：1.接口列表 2.请求/响应格式 3.参数说明 4.示例调用
     context: '{{full_analysis}}'
   outputs:
     api_docs: generated_text
@@ -73,34 +60,46 @@ steps:
   on_fail:
   max_retries: 3
   workflow:
-- id: 5
-  name: 验证测试用例质量
-  action: llm_verify
-  description: ''
-  inputs:
-    artifact: '{{test_cases}}'
-    criteria: 
-      测试用例必须针对分析报告中指出的测试覆盖率不足的模块；每个测试用例应包含明确的测试目标、输入数据、预期输出；测试用例应覆盖正常流程、边界条件和异常场景；不得生成与代码仓库无关的通用测试代码。
-  outputs:
-    test_verify_result: verify_result
-    test_passed: passed
-  condition:
-  on_fail: 3
-  max_retries: 2
-  workflow:
-- id: 6
-  name: 验证API文档完整性
+- id: 4
+  name: 验证API文档
   action: llm_verify
   description: ''
   inputs:
     artifact: '{{api_docs}}'
-    criteria: 
-      API文档必须基于代码仓库中的实际接口定义生成；应包含完整的接口端点列表、请求/响应格式说明、参数描述和示例；不得包含虚构的或与代码仓库无关的API接口。
+    criteria: 文档必须包含接口列表、请求/响应格式、参数说明；不得有未替换的{{...}}占位符；格式为Markdown
   outputs:
     api_verify_result: verify_result
     api_passed: passed
   condition:
-  on_fail: 4
+  on_fail: 3
+  max_retries: 2
+  workflow:
+- id: 5
+  name: 补写测试用例
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 针对分析中指出的测试覆盖率不足的模块，补写pytest测试用例。每个测试文件应包含：1.必要的import 2.测试类 3.测试函数
+      4.assert断言
+    context: '{{full_analysis}}'
+  outputs:
+    test_cases: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 6
+  name: 验证测试用例
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{test_cases}}'
+    criteria: 测试用例必须包含pytest import、test_前缀的函数、assert语句；不得有未替换的{{...}}占位符；代码语法正确
+  outputs:
+    test_verify_result: verify_result
+    test_passed: passed
+  condition:
+  on_fail: 5
   max_retries: 2
   workflow:
 - id: 7
@@ -108,10 +107,10 @@ steps:
   action: file_writer
   description: ''
   inputs:
-    file_path: '{{output_path}}'
-    content: "# 代码仓库技术审查报告\n\n## 1. 项目架构概览\n\n{{full_analysis}}\n\n## 2. 补充测试用例\n\n\
-      {{test_cases}}\n\n## 3. API接口文档\n\n{{api_docs}}\n\n## 4. 总结与建议\n\n基于以上分析，提出以下改进建议：\n\
-      1. 架构优化建议\n2. 代码质量改进点\n3. 安全加固措施\n4. 测试策略完善\n5. 文档维护建议"
+    file_path: '{{output_report_path}}'
+    content: "# 项目技术审查报告\n\n## 项目概览\n- 分析文件数：{{file_count}} 个\n- 分析置信度：{{analysis_confidence}}\n
+      \n## 架构分析\n{{full_analysis}}\n\n## API接口文档\n{{api_docs}}\n\n## 补充测试用例\n{{test_cases}}\n
+      \n## 质量评估与改进建议\n基于上述分析，总结主要问题与改进方向。"
   outputs:
     report_path: report_path
     bytes_written: bytes_written

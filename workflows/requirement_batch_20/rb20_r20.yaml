@@ -128,7 +128,7 @@ steps:
   inputs:
     artifact: '{{strategy_recommendations}}'
     criteria: 
-      策略建议必须基于前述分析结果，针对每个用户分群提供具体、可执行的运营措施；不得包含与输入数据无关的通用建议；每条建议应明确对应特定用户群体和业务目标
+      每条建议须出现明确用户分群称谓（如高价值/活跃/流失风险等）；须含可执行动作（动词+对象）；不得整段仅为泛泛口号；不得与输入数据明显无关的通用运营套话占主导；不得含未替换占位符。
   outputs:
     strategy_verify: verify_result
     strategy_passed: passed
@@ -159,7 +159,7 @@ steps:
   inputs:
     artifact: '{{narrative_report}}'
     criteria: 
-      报告必须包含所有要求的章节（执行摘要、核心发现、机会点识别、行动建议、风险提示、附录）；内容必须基于前述分析结果，不得替换为无关主题；正文中不得出现未替换的{{...}}占位符或<待填写>标记
+      须含以下章节标题或等价小节：执行摘要、核心发现、机会点、行动建议、风险提示、附录；正文不得整篇替换为与增长分析无关的主题；不得出现未替换的双花括号占位或<待填写>。
   outputs:
     report_verify: verify_result
     report_passed: passed

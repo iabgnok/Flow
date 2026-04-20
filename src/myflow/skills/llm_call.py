@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import re
 
+import structlog
 from pydantic import BaseModel, Field
+
+log = structlog.get_logger(__name__)
 
 from myflow.infra.llm_client import LLMClient
 from myflow.skills.base import Skill, SkillExecutionError
@@ -13,6 +16,31 @@ _PLACEHOLDER_SNIPPETS = (
     "[待定]",
 )
 _DOUBLE_BRACE_FRAGMENT = re.compile(r"\{\{[\s\S]*?\}\}")
+
+# on_fail 回跳后 Runner 写入 context；注入 user 侧避免「盲重试」
+_MAX_PREV_ERROR_CHARS = 6000
+
+
+def _append_on_fail_feedback(parts: list[str], context: dict) -> None:
+    """若上一步校验/业务失败已写入 _prev_error，则附加到本轮 LLM user 文本（不依赖 YAML 显式引用）。"""
+    prev_error = str(context.get("_prev_error", "")).strip()
+    if not prev_error:
+        return
+    raw_attempt = context.get("_attempt", 0)
+    try:
+        attempt = int(raw_attempt)
+    except (TypeError, ValueError):
+        attempt = 0
+    if attempt < 1:
+        return
+    if len(prev_error) > _MAX_PREV_ERROR_CHARS:
+        prev_error = prev_error[:_MAX_PREV_ERROR_CHARS] + "\n…(已截断)"
+    parts.append(
+        f"\n【重试说明】这是第 {attempt + 1} 次尝试。"
+        "上一步校验未通过或执行失败，原因如下:\n"
+        f"{prev_error}\n"
+        "请针对上述问题修正输出。"
+    )
 
 # 摘要/简洁类措辞：用于在 analyze/generate 中追加长度约束（非替换用户 instruction）
 _CONCISE_KEYWORDS = re.compile(
@@ -83,13 +111,20 @@ class LLMAnalyzeSkill(Skill):
 
     async def execute(self, inputs: LLMAnalyzeInput, context: dict) -> LLMAnalyzeOutput:
         length_rule = _analysis_length_rule(inputs.instruction)
-        system = (
-            "你是严谨的分析师。根据用户指令分析给定内容，输出简明、可执行的结论。\n"
-            f"{length_rule}\n"
-            "**禁止**在结论中使用未替换的占位符（如 {{{{字段名}}}}、<待填写>、待定、TBD 等非实质内容）；"
-            "analysis_result 必须是面向最终读者的可用正文。"
-        )
-        user = f"指令:\n{inputs.instruction}\n\n---\n内容:\n{inputs.content}\n"
+        system_parts = [
+            "你是严谨的分析师。根据用户指令分析给定内容，输出简明、可执行的结论。",
+            length_rule,
+            "分析结论**必须基于给定内容**，不得替换为与给定内容无关的主题或示例。",
+            "若给定内容为代码，分析和任何修改建议必须保留原有的函数名、类名和模块结构，"
+            "不得将其替换为另一套无关代码或重新命名核心标识符。",
+            "**禁止**在结论中使用未替换的占位符"
+            "（如 {{{{字段名}}}}、<待填写>、待定、TBD 等非实质内容）；"
+            "analysis_result 必须是面向最终读者的可用正文。",
+        ]
+        system = "\n".join(system_parts)
+        parts = [f"指令:\n{inputs.instruction}\n\n---\n内容:\n{inputs.content}\n"]
+        _append_on_fail_feedback(parts, context)
+        user = "".join(parts)
         out = await self._llm.create_structured(
             response_model=LLMAnalyzeOutput,
             system=system,
@@ -146,6 +181,7 @@ class LLMGenerateSkill(Skill):
         parts = [f"要求:\n{inputs.instruction}"]
         if inputs.context.strip():
             parts.append(f"\n参考资料:\n{inputs.context}")
+        _append_on_fail_feedback(parts, context)
         user = "\n".join(parts)
         out = await self._llm.create_structured(
             response_model=LLMGenerateOutput,
@@ -169,9 +205,16 @@ class LLMVerifyOutput(BaseModel):
 
 class LLMVerifySkill(Skill):
     name = "llm_verify"
-    description = "用 LLM 对照标准检查产物是否合格"
-    when_to_use = "需要软性质量门禁、内容完整性检查时"
-    do_not_use_when = "可用单元测试或固定规则完全覆盖时"
+    description = "对产物做软规则检查（结构/格式/占位符/关键字等客观条件）"
+    when_to_use = (
+        "需要对单一产物做客观可核对的门禁检查时：结构是否齐全、格式是否合规、是否含占位符、"
+        "是否包含明确的关键字/片段等。适合与 on_fail 配合形成可收敛的重试闭环。"
+    )
+    do_not_use_when = (
+        "不要用于主观评价或不可稳定判定的标准（如“专业/生产级”“充分覆盖”“翻译自然流畅”“分析深入全面”等），"
+        "尤其不要把这类主观标准配 on_fail 作为打回重做门禁；此类需求应改为在 generate/analyze 的 instruction 中约束，"
+        "或仅输出建议、不触发重试闭环。若能用单元测试/静态规则完全覆盖，也不应使用。"
+    )
     idempotent = True
     input_model = LLMVerifyInput
     output_model = LLMVerifyOutput
@@ -193,5 +236,10 @@ class LLMVerifySkill(Skill):
             max_retries=2,
         )
         if not out.passed:
+            log.info(
+                "llm_verify_failed",
+                passed=False,
+                verify_result=out.verify_result,
+            )
             raise SkillExecutionError(out.verify_result)
         return out

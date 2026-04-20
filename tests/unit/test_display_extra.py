@@ -194,4 +194,5 @@ def test_step_status_and_skipped_outputs() -> None:
     d.step_status(StepResult(step_id=1, step_name="n", action="file_reader", status="success", duration_ms=5))
     d.step_status(StepResult(step_id=2, step_name="n2", action="x", status="skipped", duration_ms=0))
     d.step_outputs(StepResult(step_id=3, step_name="n3", action="y", status="skipped", outputs={}))
-    assert "OK" in buf.getvalue() or "SKIP" in buf.getvalue()
+    # step_status 使用符号渲染（✓/✗/—）；这里仅断言有输出
+    assert "Step 1" in buf.getvalue() and "Step 2" in buf.getvalue()

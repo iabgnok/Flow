@@ -290,6 +290,209 @@ def test_llm_analyze_distinct_content_strings_not_merge_grouped() -> None:
     assert report.execution_ready() is True
 
 
+def test_overlapping_retry_loops_rejected() -> None:
+    skills = {"file_reader", "llm_analyze", "llm_generate", "llm_verify"}
+    wf = WorkflowModel(
+        name="w",
+        description="d",
+        inputs={"fp": ParamSpec(type="string", description="p")},
+        steps=[
+            WorkflowStep(
+                id=1,
+                name="read",
+                action="file_reader",
+                inputs={"file_path": "{{fp}}"},
+                outputs={"zip": "file_content"},
+            ),
+            WorkflowStep(
+                id=2,
+                name="analyze",
+                action="llm_analyze",
+                inputs={"content": "{{zip}}", "instruction": "i"},
+                outputs={"fa": "analysis_result"},
+            ),
+            WorkflowStep(
+                id=3,
+                name="g1",
+                action="llm_generate",
+                inputs={"instruction": "t", "context": "{{fa}}"},
+                outputs={"t": "generated_text"},
+            ),
+            WorkflowStep(
+                id=4,
+                name="g2",
+                action="llm_generate",
+                inputs={"instruction": "a", "context": "{{fa}}"},
+                outputs={"a": "generated_text"},
+            ),
+            WorkflowStep(
+                id=5,
+                name="v1",
+                action="llm_verify",
+                inputs={"artifact": "{{t}}", "criteria": "c"},
+                outputs={"vr": "verify_result", "p": "passed"},
+                on_fail=3,
+                max_retries=2,
+            ),
+            WorkflowStep(
+                id=6,
+                name="v2",
+                action="llm_verify",
+                inputs={"artifact": "{{a}}", "criteria": "c"},
+                outputs={"vr2": "verify_result", "p2": "passed"},
+                on_fail=4,
+                max_retries=2,
+            ),
+        ],
+    )
+    report = _validate(wf, skills)
+    assert any(e.code == "OVERLAPPING_RETRY_LOOPS" for e in report.errors)
+
+
+def test_nested_retry_loops_allowed() -> None:
+    skills = {"file_reader", "llm_analyze", "llm_generate", "llm_verify"}
+    wf = WorkflowModel(
+        name="w",
+        description="d",
+        inputs={"fp": ParamSpec(type="string", description="p")},
+        steps=[
+            WorkflowStep(
+                id=1,
+                name="read",
+                action="file_reader",
+                inputs={"file_path": "{{fp}}"},
+                outputs={"zip": "file_content"},
+            ),
+            WorkflowStep(
+                id=2,
+                name="analyze",
+                action="llm_analyze",
+                inputs={"content": "{{zip}}", "instruction": "i"},
+                outputs={"fa": "analysis_result"},
+            ),
+            WorkflowStep(
+                id=3,
+                name="inner",
+                action="llm_generate",
+                inputs={"instruction": "inner", "context": "{{fa}}"},
+                outputs={"gi": "generated_text"},
+            ),
+            WorkflowStep(
+                id=4,
+                name="outer",
+                action="llm_generate",
+                inputs={"instruction": "outer", "context": "{{fa}}"},
+                outputs={"go": "generated_text"},
+            ),
+            WorkflowStep(
+                id=5,
+                name="v_inner",
+                action="llm_verify",
+                inputs={"artifact": "{{gi}}", "criteria": "c"},
+                outputs={"vri": "verify_result", "pi": "passed"},
+                on_fail=3,
+                max_retries=2,
+            ),
+            WorkflowStep(
+                id=6,
+                name="v_outer",
+                action="llm_verify",
+                inputs={"artifact": "{{go}}", "criteria": "c"},
+                outputs={"vro": "verify_result", "po": "passed"},
+                on_fail=2,
+                max_retries=2,
+            ),
+        ],
+    )
+    report = _validate(wf, skills)
+    assert not any(e.code == "OVERLAPPING_RETRY_LOOPS" for e in report.errors)
+
+
+def test_independent_retry_loops_allowed() -> None:
+    skills = {"file_reader", "llm_analyze", "llm_generate", "llm_verify"}
+    wf = WorkflowModel(
+        name="w",
+        description="d",
+        inputs={"fp": ParamSpec(type="string", description="p")},
+        steps=[
+            WorkflowStep(
+                id=1,
+                name="read",
+                action="file_reader",
+                inputs={"file_path": "{{fp}}"},
+                outputs={"zip": "file_content"},
+            ),
+            WorkflowStep(
+                id=2,
+                name="analyze",
+                action="llm_analyze",
+                inputs={"content": "{{zip}}", "instruction": "i"},
+                outputs={"fa": "analysis_result"},
+            ),
+            WorkflowStep(
+                id=3,
+                name="g1",
+                action="llm_generate",
+                inputs={"instruction": "t", "context": "{{fa}}"},
+                outputs={"t": "generated_text"},
+            ),
+            WorkflowStep(
+                id=4,
+                name="v1",
+                action="llm_verify",
+                inputs={"artifact": "{{t}}", "criteria": "c"},
+                outputs={"vr": "verify_result", "p": "passed"},
+                on_fail=3,
+                max_retries=2,
+            ),
+            WorkflowStep(
+                id=5,
+                name="g2",
+                action="llm_generate",
+                inputs={"instruction": "a", "context": "{{fa}}"},
+                outputs={"a": "generated_text"},
+            ),
+            WorkflowStep(
+                id=6,
+                name="v2",
+                action="llm_verify",
+                inputs={"artifact": "{{a}}", "criteria": "c"},
+                outputs={"vr2": "verify_result", "p2": "passed"},
+                on_fail=5,
+                max_retries=2,
+            ),
+        ],
+    )
+    report = _validate(wf, skills)
+    assert not any(e.code == "OVERLAPPING_RETRY_LOOPS" for e in report.errors)
+
+
+def test_duplicate_context_output_key_rejected() -> None:
+    wf = WorkflowModel(
+        name="w",
+        description="d",
+        inputs={"fp": ParamSpec(type="string", description="p")},
+        steps=[
+            WorkflowStep(
+                id=1,
+                name="s1",
+                action="file_reader",
+                inputs={"file_path": "{{fp}}"},
+                outputs={"x": "file_content"},
+            ),
+            WorkflowStep(
+                id=2,
+                name="s2",
+                action="file_reader",
+                inputs={"file_path": "{{fp}}"},
+                outputs={"x": "file_content"},
+            ),
+        ],
+    )
+    report = _validate(wf, {"file_reader"})
+    assert any(w.code == "DUPLICATE_CONTEXT_OUTPUT_KEY" for w in report.warnings)
+
+
 def test_valid_workflow_passes() -> None:
     wf = WorkflowModel(
         name="w",

@@ -1,0 +1,107 @@
+name: pdf_translation_and_summary
+description: 读取英文论文PDF，翻译成中文并整理摘要
+version: '1.0'
+inputs:
+  pdf_path:
+    type: string
+    description: 英文论文PDF文件路径
+    required: true
+    default:
+  output_dir:
+    type: string
+    description: 输出文件目录
+    required: true
+    default:
+outputs:
+  translation_path:
+    type: string
+    description: 中文翻译文件路径
+    required: true
+    default:
+  summary_path:
+    type: string
+    description: 摘要文件路径
+    required: true
+    default:
+steps:
+- id: 1
+  name: 读取PDF文件
+  action: file_reader
+  description: ''
+  inputs:
+    file_path: '{{pdf_path}}'
+  outputs:
+    pdf_content: file_content
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 2
+  name: 翻译为中文
+  action: llm_generate
+  description: ''
+  inputs:
+    instruction: 将以下英文论文完整翻译为中文，保持原文结构、专业术语准确，确保翻译流畅自然
+    context: '{{pdf_content}}'
+  outputs:
+    chinese_translation: generated_text
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 3
+  name: 验证翻译完整性
+  action: llm_verify
+  description: ''
+  inputs:
+    artifact: '{{chinese_translation}}'
+    criteria: 翻译内容完整，不含未翻译的英文段落或占位符（如{{...}}、<待填写>、TBD等），长度至少为原文的70%
+  outputs:
+    translation_verify_result: verify_result
+    translation_passed: passed
+  condition:
+  on_fail: 2
+  max_retries: 2
+  workflow:
+- id: 4
+  name: 保存中文翻译
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_dir}}/translation.txt'
+    content: '{{chinese_translation}}'
+  outputs:
+    translation_path: report_path
+    translation_bytes: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 5
+  name: 生成论文摘要
+  action: llm_analyze
+  description: ''
+  inputs:
+    content: '{{chinese_translation}}'
+    instruction: 基于中文翻译内容，提取论文的核心摘要，包括：1.研究背景与问题 2.研究方法 3.主要发现 
+      4.结论与意义。用中文输出，控制在500字以内
+  outputs:
+    paper_summary: analysis_result
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:
+- id: 6
+  name: 保存摘要
+  action: file_writer
+  description: ''
+  inputs:
+    file_path: '{{output_dir}}/summary.txt'
+    content: '{{paper_summary}}'
+  outputs:
+    summary_path: report_path
+    summary_bytes: bytes_written
+  condition:
+  on_fail:
+  max_retries: 3
+  workflow:

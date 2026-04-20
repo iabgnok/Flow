@@ -119,7 +119,12 @@ async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, r
     config = AppConfig()
     registry = build_default_registry(config)
     store = StateStore(config.db_path)
-    runner = Runner(registry, store, config)
+    def _on_step(sr):
+        display.step_status(sr)
+        if verbose and sr.status == "success":
+            display.step_outputs(sr)
+
+    runner = Runner(registry, store, config, on_step_result=_on_step)
 
     try:
         wf = load_workflow(_ensure_workflow_yaml_file(workflow_path))
@@ -144,11 +149,8 @@ async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, r
         console.print(f"[red]执行失败（未捕获异常）:[/] {e}")
         raise typer.Exit(code=1) from e
 
-    for sr in result.step_results:
-        display.step_status(sr)
-        if verbose and sr.status == "success":
-            display.step_outputs(sr)
-    display.run_result(result)
+    # 步骤已在执行过程中逐条打印；结尾 run 报告仍保留完整步骤表便于对照与复制。
+    display.run_result(result, show_steps=True)
     if result.status == "completed":
         display.completed_final_echo(result)
 

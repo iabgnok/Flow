@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -43,7 +44,13 @@ def configure_logging(*, debug: bool) -> None:
     if sys.stderr.isatty():
         shared.append(structlog.dev.ConsoleRenderer(colors=True))
     else:
-        shared.append(structlog.processors.JSONRenderer())
+        # 默认 JSONRenderer 会 ensure_ascii=True，中文会变成 \uXXXX，难读；
+        # 这里用 ensure_ascii=False 让日志在文件/管道里也保持可读。
+        shared.append(
+            structlog.processors.JSONRenderer(
+                serializer=lambda obj, **_: json.dumps(obj, ensure_ascii=False, default=str)
+            )
+        )
 
     structlog.configure(
         processors=shared,

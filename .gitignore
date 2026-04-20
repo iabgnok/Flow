@@ -26,5 +26,6 @@ myflow_state.db
 requirement_batch_io/runs/*
 !requirement_batch_io/runs/.gitkeep
 修改.md
+tmp_demo/
 
 .vscode/

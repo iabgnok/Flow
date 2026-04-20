@@ -25,9 +25,10 @@ class Display:
         self.c = console
 
     def step_status(self, step: StepResult) -> None:
+        # 终端/重定向下 Unicode 符号与竖线容易乱码；这里用纯 ASCII，保证稳定可读。
         icon = {"success": "[green]OK[/]", "failed": "[red]X[/]", "skipped": "[dim]SKIP[/]"}
         self.c.print(
-            f"  {icon.get(step.status, '?')} Step {step.step_id} │ {step.step_name} │ {step.action} │ {step.duration_ms}ms"
+            f"  {icon.get(step.status, '?')} Step {step.step_id} | {step.step_name} | {step.action} | {step.duration_ms}ms"
         )
 
     def step_outputs(self, step: StepResult, *, heading: str | None = None) -> None:
@@ -143,25 +144,28 @@ class Display:
             return s[: _OUTPUT_SINGLE_LINE_MAX] + " … [dim][省略][/]"
         return s
 
-    def run_result(self, result: RunResult) -> None:
+    def run_result(self, result: RunResult, *, show_steps: bool = True) -> None:
         status_color = {"completed": "green", "failed": "red", "interrupted": "yellow"}
         color = status_color.get(result.status, "white")
 
-        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
-        table.add_column("Step", style="dim", width=6)
-        table.add_column("Name", min_width=16)
-        table.add_column("Action", style="cyan")
-        table.add_column("Status", width=8)
-        table.add_column("Time", justify="right", width=8)
+        body = ""
+        if show_steps:
+            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+            table.add_column("Step", style="dim", width=6)
+            table.add_column("Name", min_width=16)
+            table.add_column("Action", style="cyan")
+            table.add_column("Status", width=8)
+            table.add_column("Time", justify="right", width=8)
 
-        for sr in result.step_results:
-            status_text = {"success": "[green]OK[/]", "failed": "[red]X[/]", "skipped": "[dim]SKIP[/]"}.get(
-                sr.status, sr.status
-            )
-            table.add_row(str(sr.step_id), sr.step_name, sr.action, status_text, f"{sr.duration_ms}ms")
+            for sr in result.step_results:
+                status_text = {"success": "[green]OK[/]", "failed": "[red]X[/]", "skipped": "[dim]SKIP[/]"}.get(
+                    sr.status, sr.status
+                )
+                table.add_row(str(sr.step_id), sr.step_name, sr.action, status_text, f"{sr.duration_ms}ms")
+            body = table
 
         panel = Panel(
-            table,
+            body,
             title=f"Run {result.run_id[:8]} — {result.workflow_name}",
             subtitle=f"[{color}]{result.status}[/] │ {result.total_duration_ms}ms",
             border_style=color,
