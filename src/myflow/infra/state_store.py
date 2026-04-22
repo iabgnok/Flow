@@ -11,6 +11,7 @@ class StateStore:
     def __init__(self, db_path: str = "myflow_state.db"):
         self.db_path = db_path
 
+    # 初始化数据库表结构（如果尚未存在）
     async def init(self) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -49,6 +50,23 @@ class StateStore:
         if "duration_ms" not in names:
             await db.execute("ALTER TABLE steps ADD COLUMN duration_ms INTEGER")
 
+
+
+    # save_run 负责 run 生命周期节点写入（run表）
+        # 启动时：
+            # 写 running（current_step_id=0）。
+        # 中断时：
+            # 再写一次 running（带当前 step 游标）。
+        # 完成时
+            # 异常失败时：在 runner.py:263 写 failed。
+            # 正常完成时：在 runner.py:276 写 completed。
+    # save_checkpoint 负责步骤前进度快照（runs表）
+        # 只更新 runs 表的 current_step_id、context_json、updated_at。
+    # save_step 负责步骤执行结果明细。（steps表）
+        # 成功分支调 save_step，status 为 success。
+        # 失败分支调 save_step，status 为 failed。
+
+    # 保存或更新运行记录；如果 run_id 已存在则覆盖（适用于恢复场景）
     async def save_run(
         self,
         run_id: str,
@@ -71,6 +89,9 @@ class StateStore:
             )
             await db.commit()
 
+    # 更新运行状态和上下文（适用于每步完成后的 checkpoint）
+    # 与save_run 的区别在于：不修改 workflow_name，且仅更新 current_step_id、context_json 和 updated_at
+    # 都是针对运行层面的记录；步骤层面的记录由 save_step 负责
     async def save_checkpoint(self, run_id: str, step_id: int, context: dict[str, Any]) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -79,6 +100,8 @@ class StateStore:
             )
             await db.commit()
 
+    # 保存步骤记录；同一 run_id 和 step_id 的记录允许多条
+    # （on_fail 回跳时会重复记录同一步），因此不设 UNIQUE 约束 
     async def save_step(
         self,
         run_id: str,
@@ -135,6 +158,9 @@ class StateStore:
             ) as cursor:
                 return [dict(row) async for row in cursor]
 
+    # 先做 run_id 精确匹配。
+    # 精确失败后，在最近 500 条里做“前缀唯一匹配”。
+    # 仅当候选唯一时返回该 run_id，否则返回 None（避免歧义）。
     async def resolve_run_id(self, ref: str) -> str | None:
         """精确匹配 run_id；否则在最近记录中尝试唯一前缀匹配。"""
         r = ref.strip()
@@ -156,6 +182,9 @@ class StateStore:
         rows = await self.list_runs(limit=limit)
         return [str(r["run_id"]) for r in rows if str(r["run_id"]).startswith(p)]
 
+    # 读取某 run 的全部步骤记录，按 created_at 排序。
+    # 把每条记录的 output_json 解析为 output 字段。
+    # 解析失败时兜底为空字典，避免因为坏数据导致整体读取失败。
     async def load_steps(self, run_id: str) -> list[dict[str, Any]]:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row

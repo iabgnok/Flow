@@ -8,17 +8,18 @@ from myflow.infra.config import AppConfig
 from myflow.infra.state_store import StateStore
 from myflow.skills.base import Skill, SkillExecutionError
 
-
+# 必要的子工作流路径，和动态的输入
 class SubWorkflowInput(BaseModel):
     """workflow_path 由 Runner 注入；其余字段为子工作流契约输入。"""
 
     workflow_path: str
+    # 允许携带任意额外字段
     model_config = ConfigDict(extra="allow")
 
-
+# 动态结果容器
 class SubWorkflowOutput(BaseModel):
     """子工作流 outputs 键扁平合并到父上下文；具体键由子 YAML 契约决定。"""
-
+    # 允许携带任意额外字段
     model_config = ConfigDict(extra="allow")
 
 
@@ -32,11 +33,13 @@ class SubWorkflowSkill(Skill):
     output_model = SubWorkflowOutput
 
     def __init__(self, registry: SkillRegistry, store: StateStore, config: AppConfig) -> None:
+        # 调用父类初始化逻辑，初始化子类的实例
         super().__init__()
+        # 之后注入子类自己需要的依赖项：技能注册表、状态存储、应用配置
         self._registry = registry
         self._store = store
         self._config = config
-
+    # 抽象方法实现
     async def execute(self, inputs: SubWorkflowInput, context: dict) -> SubWorkflowOutput:
         payload = inputs.model_dump()
         wf_path = str(payload.pop("workflow_path", "") or "").strip()
@@ -55,12 +58,16 @@ class SubWorkflowSkill(Skill):
         child_ctx = {k: v for k, v in payload.items() if v is not None}
         from myflow.engine.runner import Runner
 
+        # 创建子工作流的runner实例：入参：工作流对象，初始上下文；返回：运行结果
         runner = Runner(self._registry, self._store, self._config)
+        # 运行子工作流：入参：工作流对象，初始上下文；返回：运行结果
         sub_run = await runner.run(child_wf, initial_context=child_ctx)
         if sub_run.status != "completed":
             err = sub_run.error or "子工作流未成功完成"
             raise SkillExecutionError(f"子工作流执行失败 ({child_wf.name}): {err}")
-
+        
+        # 将子工作流 outputs 中声明的键从子上下文合并到父上下文；
+        # 如果 outputs 为空，则默认合并所有非私有键（不以 _ 开头）
         out: dict = {}
         for key in child_wf.outputs.keys():
             if key in sub_run.final_context:

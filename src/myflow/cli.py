@@ -26,8 +26,9 @@ from myflow.infra.logging_config import configure_logging, logging_from_env
 from myflow.infra.llm_client import LLMClient
 from myflow.infra.state_store import StateStore
 
-
+# 初始化CLI对象：typer.Typer，用于解析命令行参数
 app = typer.Typer(name="myflow", help="AI 工作流生成与执行引擎", no_args_is_help=True)
+
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -68,7 +69,7 @@ def _ensure_workflow_yaml_file(raw: Path) -> Path:
     )
     raise typer.Exit(code=2)
 
-
+# 解析输入参数：入参：key=value 格式的字符串列表；返回：字典
 def _parse_inputs(pairs: list[str]) -> dict:
     ctx: dict[str, object] = {}
     for item in pairs:
@@ -103,7 +104,7 @@ async def _resolve_run_id_or_exit(store: StateStore, ref: str) -> str:
     )
     raise typer.Exit(code=2)
 
-
+# 运行命令捕获
 @app.command()
 def run(
     workflow_path: Path = typer.Argument(..., help="工作流 YAML 文件路径"),
@@ -114,7 +115,7 @@ def run(
     """执行指定工作流。"""
     asyncio.run(_run_workflow(workflow_path, inputs, verbose, run_id))
 
-
+# 执行工作流：入参：工作流路径，输入参数，是否打印详细信息，恢复指定 run_id 的中断执行
 async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, run_id: str | None) -> None:
     config = AppConfig()
     registry = build_default_registry(config)
@@ -123,7 +124,7 @@ async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, r
         display.step_status(sr)
         if verbose and sr.status == "success":
             display.step_outputs(sr)
-
+    # 初始化Runner对象：入参：技能注册表，状态存储，配置，回调函数（用于打印步骤结果）
     runner = Runner(registry, store, config, on_step_result=_on_step)
 
     try:
@@ -138,6 +139,7 @@ async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, r
     ctx = _parse_inputs(inputs)
 
     try:
+        # 运行工作流：入参：工作流对象，初始上下文，恢复 run_id；返回：运行结果
         result = await runner.run(wf, initial_context=ctx, run_id=run_id)
     except KeyboardInterrupt:
         console.print(
@@ -157,7 +159,7 @@ async def _run_workflow(workflow_path: Path, inputs: list[str], verbose: bool, r
     if result.status != "completed":
         raise typer.Exit(code=1)
 
-
+# 生成命令捕获
 @app.command()
 def generate(
     requirement: str = typer.Argument(..., help="自然语言需求描述"),
@@ -168,7 +170,7 @@ def generate(
     """根据自然语言生成工作流 YAML。"""
     asyncio.run(_generate_workflow(requirement, output, verbose, execute))
 
-
+# 生成工作流：入参：自然语言需求描述，输出文件路径，是否打印详细信息，生成校验通过后是否立即执行
 async def _generate_workflow(
     requirement: str,
     output: Path | None,

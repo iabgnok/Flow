@@ -57,6 +57,7 @@ class StepFailedError(RuntimeError):
 
 
 class Runner:
+    # 初始化Runner对象：入参：技能注册表，状态存储，配置，回调函数（用于打印步骤结果）
     def __init__(
         self,
         registry: SkillRegistry,
@@ -85,6 +86,8 @@ class Runner:
     ) -> RunResult:
         # 初始化一次run的所有资产
         run_id = run_id or uuid4().hex
+        # 上下文context是工作流执行过程中不断更新的状态；
+        # 初始值来自入参 initial_context（如果有的话），否则是空字典；每步执行成功后会把技能输出写回上下文；每步执行前会把当前上下文保存到 state_store 以支持断点续传；
         context = dict(initial_context or {})
         step_results: list[StepResult] = []
         retry_counts: dict[int, int] = {}
@@ -108,6 +111,8 @@ class Runner:
         await self.state_store.init()
         # 断点续传：尝试从state_store中恢复上下文和当前步骤索引；
         context, start_index = await self._maybe_resume(run_id, context, workflow)
+        # 工作流输入预处理：将工作流契约中声明的 default 填入上下文（仅当该键缺失或为 None）
+        # 校验 CLI 传入的键名与必填输入；有问题则返回失败结果；
         self._seed_workflow_input_defaults(workflow, context)
         runtime_err = self._validate_runtime_inputs(workflow, context, initial_context or {})
         if runtime_err:
@@ -118,12 +123,15 @@ class Runner:
                 error=runtime_err,
                 total_duration_ms=int((time.monotonic() - start_time) * 1000),
             )
-
+        
+        # 首先按步骤id大小排序（线性引擎），大小顺序就是执行顺序（on_fail是特殊情况）
         steps_sorted = sorted(workflow.steps, key=lambda s: s.id)
         resume_cursor = 0 if start_index == 0 else steps_sorted[start_index].id
+        # 持久化运行记录（run表），状态置为 running，保存初始上下文和恢复起点（如果有的话）
         await self.state_store.save_run(run_id, workflow.name, "running", context, current_step_id=resume_cursor)
 
         # 主循环：遍历工作流步骤列表，执行每个步骤；
+        # 运行的异常收口和状态落盘
         i = start_index
         try:
             while i < len(steps_sorted):
@@ -154,10 +162,11 @@ class Runner:
                         continue
 
                 # step执行正式开始
-                # 持久化锚点：将当前上下文保存到state_store中，表示步骤开始执行；
+                # 持久化锚点：将当前上下文保存到state_store（run表）中，表示步骤开始执行；
                 await self.state_store.save_checkpoint(run_id, step.id, context)
 
                 # 执行技能
+                # 运行级的重试块：处理onfail跳转
                 try:
                     # 获取技能实例：根据step的action属性从注册表中获取技能实例
                     skill = self.registry.get(step.action)
@@ -246,6 +255,7 @@ class Runner:
                 i += 1
 
         except KeyboardInterrupt:
+            # 用户中断，持久化当前运行记录的生命周期
             cur = steps_sorted[i].id if i < len(steps_sorted) else 0
             await self.state_store.save_run(run_id, workflow.name, "running", context, current_step_id=cur)
             raise
